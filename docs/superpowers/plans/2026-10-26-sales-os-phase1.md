@@ -16,7 +16,7 @@
 - Next.js 16: use `proxy.ts`, never `middleware.ts`; `await params`, `await searchParams`, `await cookies()`.
 - Tailwind 4 tokens on `:root` / `.dark` exactly as listed in spec §7.1; accent `#2563eb` light, `#60a5fa` dark.
 - Prisma 7: `prisma.config.ts` holds the datasource URL; generator `prisma-client` outputs to `src/generated/prisma`; client built with `new PrismaPg({ connectionString })`.
-- Phone stored E.164, default region `IN`. Money stored as integer paise, displayed with Indian grouping.
+- Phone stored E.164, default region `IN`. Money stored as integer rupees (never paise; Int32 overflows paise at ₹2.14 Cr), displayed with Indian grouping.
 - Every Lead mutation writes a `LeadEvent`.
 - Session cookie name `sales_os_session`, `HttpOnly`, `SameSite=Lax`, 30-day expiry.
 - Every screen usable at 360 px; touch targets ≥ 44 px; bottom tab bar `< md`, sidebar `≥ lg`.
@@ -174,7 +174,7 @@ import { resetDb } from "../helpers/db";
 describe("db", () => {
   beforeEach(resetDb);
   it("connects to the test database and round-trips a Project", async () => {
-    const p = await db.project.create({ data: { name: "Krishvi Triple One", slug: "krishvi-111", city: "Bengaluru", priceMinPaise: 850000000, priceMaxPaise: 1600000000 } });
+    const p = await db.project.create({ data: { name: "Krishvi Triple One", slug: "krishvi-111", city: "Bengaluru", priceMinRupees: 8500000, priceMaxRupees: 16000000 } });
     expect((await db.project.findUnique({ where: { id: p.id } }))?.slug).toBe("krishvi-111");
     expect(process.env.DATABASE_URL_TEST).toBeDefined();
   });
@@ -218,9 +218,9 @@ git commit -m "feat: add Prisma schema, initial migration and db client"
 **Interfaces:**
 - Produces:
   - `normalizePhone(raw: string, defaultRegion = "IN"): string | null` (E.164 or null when invalid), `toWaLink(e164: string): string` → `https://wa.me/919845012345`, `toTelLink(e164: string): string`.
-  - `parseRupeesToPaise(input: string | number): number | null` (accepts `"45L"`, `"45 lakh"`, `"1.2Cr"`, `"1.2 crore"`, `"45,00,000"`, `4500000`), `formatPaise(paise: number): string` → `"₹45,00,000"`, `formatPaiseShort(paise: number): string` → `"₹45L"` / `"₹1.2Cr"`.
+  - `parseRupees(input: string | number): number | null` → whole rupees (accepts `"45L"`, `"45 lakh"`, `"1.2Cr"`, `"1.2 crore"`, `"45,00,000"`, `4500000`), `formatRupees(rupees: number): string` → `"₹45,00,000"`, `formatRupeesShort(rupees: number): string` → `"₹45L"` / `"₹1.2Cr"`.
   - `STAGE_ORDER: readonly LeadStage[]`, `STAGE_LABELS: Record<LeadStage,string>`, `STAGE_COLORS: Record<LeadStage,{bg:string;fg:string}>`, `canTransition(from: LeadStage, to: LeadStage): boolean`, `isTerminal(stage: LeadStage): boolean`.
-  - `computeScore(input: { source: LeadSource; budgetPaise?: number|null; configuration?: string|null; locality?: string|null; email?: string|null; project?: { priceMinPaise: number; priceMaxPaise: number } | null }): number`.
+  - `computeScore(input: { source: LeadSource; budgetRupees?: number|null; configuration?: string|null; locality?: string|null; email?: string|null; project?: { priceMinRupees: number; priceMaxRupees: number } | null }): number`.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -236,10 +236,10 @@ it("returns null for junk", () => { expect(normalizePhone("12")).toBeNull(); exp
 it("builds wa.me and tel links", () => { expect(toWaLink("+919845012345")).toBe("https://wa.me/919845012345"); expect(toTelLink("+919845012345")).toBe("tel:+919845012345"); });
 
 // tests/unit/money.test.ts
-it.each([["45L", 450000000], ["45 lakh", 450000000], ["1.2Cr", 1200000000], ["1.2 crore", 1200000000], ["45,00,000", 450000000], [4500000, 450000000], ["ask", null], ["", null]])
-  ("parseRupeesToPaise(%s) -> %s", (i, o) => expect(parseRupeesToPaise(i)).toBe(o));
-it("formats with Indian grouping", () => { expect(formatPaise(450000000)).toBe("₹45,00,000"); expect(formatPaise(1200000000)).toBe("₹1,20,00,000"); });
-it("formats short", () => { expect(formatPaiseShort(450000000)).toBe("₹45L"); expect(formatPaiseShort(1200000000)).toBe("₹1.2Cr"); expect(formatPaiseShort(5000000)).toBe("₹50K"); });
+it.each([["45L", 4500000], ["45 lakh", 4500000], ["1.2Cr", 12000000], ["1.2 crore", 12000000], ["45,00,000", 4500000], [4500000, 4500000], ["ask", null], ["", null]])
+  ("parseRupees(%s) -> %s", (i, o) => expect(parseRupees(i)).toBe(o));
+it("formats with Indian grouping", () => { expect(formatRupees(4500000)).toBe("₹45,00,000"); expect(formatRupees(12000000)).toBe("₹1,20,00,000"); });
+it("formats short", () => { expect(formatRupeesShort(4500000)).toBe("₹45L"); expect(formatRupeesShort(12000000)).toBe("₹1.2Cr"); expect(formatRupeesShort(50000)).toBe("₹50K"); });
 
 // tests/unit/stages.test.ts
 it("allows forward jumps of any size", () => expect(canTransition("NEW", "NEGOTIATION")).toBe(true));
@@ -249,11 +249,11 @@ it("BOOKED is terminal except LOST", () => { expect(canTransition("BOOKED", "NEG
 it("STAGE_ORDER has 8 stages ending in BOOKED, LOST", () => expect(STAGE_ORDER.slice(-2)).toEqual(["BOOKED", "LOST"]));
 
 // tests/unit/score.test.ts
-const project = { priceMinPaise: 800000000, priceMaxPaise: 1600000000 };
+const project = { priceMinRupees: 8000000, priceMaxRupees: 16000000 };
 it("scores a bare Meta lead at 40", () => expect(computeScore({ source: "META_LEAD_AD" })).toBe(40));
-it("adds budget-in-range, configuration, locality, email", () => expect(computeScore({ source: "REFERRAL", budgetPaise: 1000000000, configuration: "3BHK", locality: "Whitefield", email: "a@b.c", project })).toBe(100));
-it("ignores budget when out of range or no project", () => { expect(computeScore({ source: "WEBSITE", budgetPaise: 100, project })).toBe(45); expect(computeScore({ source: "WEBSITE", budgetPaise: 1000000000 })).toBe(45); });
-it("clamps to 100", () => expect(computeScore({ source: "REFERRAL", budgetPaise: 900000000, configuration: "x", locality: "y", email: "z", project })).toBeLessThanOrEqual(100));
+it("adds budget-in-range, configuration, locality, email", () => expect(computeScore({ source: "REFERRAL", budgetRupees: 10000000, configuration: "3BHK", locality: "Whitefield", email: "a@b.c", project })).toBe(100));
+it("ignores budget when out of range or no project", () => { expect(computeScore({ source: "WEBSITE", budgetRupees: 1, project })).toBe(45); expect(computeScore({ source: "WEBSITE", budgetRupees: 10000000 })).toBe(45); });
+it("clamps to 100", () => expect(computeScore({ source: "REFERRAL", budgetRupees: 9000000, configuration: "x", locality: "y", email: "z", project })).toBeLessThanOrEqual(100));
 ```
 
 - [ ] **Step 2: Run tests to verify they fail**
@@ -263,7 +263,7 @@ Expected: FAIL on unresolved imports.
 
 - [ ] **Step 3: Implement the four modules**
 
-`phone.ts` uses `libphonenumber-js` `parsePhoneNumberFromString(raw, defaultRegion)` and returns `.number` only when `.isValid()`. `money.ts`: regex `^\s*([\d.,]+)\s*(l|lakh|lac|cr|crore|k)?\s*$` case-insensitive, strip commas, multiply (`L`=1e5, `Cr`=1e7, `K`=1e3), return `Math.round(rupees * 100)`; `formatPaise` uses `Intl.NumberFormat("en-IN", { maximumFractionDigits: 0 })`; `formatPaiseShort` picks Cr ≥ 1e7 rupees, L ≥ 1e5, K ≥ 1e3, one decimal trimmed of trailing `.0`. `stages.ts` colours: NEW slate, CONTACTED sky, QUALIFIED indigo, SITE_VISIT_SCHEDULED violet, SITE_VISIT_DONE purple, NEGOTIATION amber, BOOKED emerald, LOST rose (Tailwind 500 for `fg`, 100/900 for `bg` light/dark via CSS vars `--stage-<name>`). `score.ts` per spec §4.2.
+`phone.ts` uses `libphonenumber-js` `parsePhoneNumberFromString(raw, defaultRegion)` and returns `.number` only when `.isValid()`. `money.ts`: regex `^\s*([\d.,]+)\s*(l|lakh|lac|cr|crore|k)?\s*$` case-insensitive, strip commas, multiply (`L`=1e5, `Cr`=1e7, `K`=1e3), return `Math.round(rupees)`; `formatRupees` uses `Intl.NumberFormat("en-IN", { maximumFractionDigits: 0 })`; `formatRupeesShort` picks Cr ≥ 1e7 rupees, L ≥ 1e5, K ≥ 1e3, one decimal trimmed of trailing `.0`. `stages.ts` colours: NEW slate, CONTACTED sky, QUALIFIED indigo, SITE_VISIT_SCHEDULED violet, SITE_VISIT_DONE purple, NEGOTIATION amber, BOOKED emerald, LOST rose (Tailwind 500 for `fg`, 100/900 for `bg` light/dark via CSS vars `--stage-<name>`). `score.ts` per spec §4.2.
 
 - [ ] **Step 4: Run tests to verify they pass**
 
@@ -361,7 +361,7 @@ git commit -m "feat: add password hashing, signed sessions, token encryption and
   - `changeStage(leadId: string, to: LeadStage, actorId: string, opts?: { lostReason?: string }): Promise<Lead>`; throws `InvalidTransitionError`, `LostReasonRequiredError`.
   - `assignLead(leadId, ownerId: string | null, actorId): Promise<Lead>`
   - `addNote(leadId, text: string, actorId): Promise<LeadEvent>`
-  - `updateLeadFields(leadId, patch: Partial<Pick<Lead,"name"|"email"|"budgetPaise"|"configuration"|"locality"|"projectId">>, actorId): Promise<Lead>` (recomputes score, emits `FIELD_UPDATED` and `SCORE_CHANGED` when score differs)
+  - `updateLeadFields(leadId, patch: Partial<Pick<Lead,"name"|"email"|"budgetRupees"|"configuration"|"locality"|"projectId">>, actorId): Promise<Lead>` (recomputes score, emits `FIELD_UPDATED` and `SCORE_CHANGED` when score differs)
   - `logContact(leadId, channel: FollowUpChannel, note: string | undefined, actorId): Promise<Lead>` (sets `lastContactedAt`, emits `CONTACT_LOGGED`; moves `NEW`→`CONTACTED`)
   - `scheduleFollowUp(leadId, input: { dueAt: Date; channel: FollowUpChannel; note?: string; ownerId: string }, actorId): Promise<FollowUp>` (sets `lead.nextFollowUpAt` to the earliest open follow-up)
   - `completeFollowUp(followUpId, actorId): Promise<FollowUp>` (recomputes `nextFollowUpAt`)
@@ -386,7 +386,7 @@ it("deduplicates on phone and appends DUPLICATE_INBOUND", async () => {
   expect((await db.lead.findUniqueOrThrow({ where: { id: a.leadId } })).nextFollowUpAt).not.toBeNull();
 });
 it("does not set nextFollowUpAt on a duplicate for a LOST lead", async () => { /* create, changeStage LOST, re-ingest */ expect(lead.nextFollowUpAt).toBeNull(); });
-it("resolves projectSlug and scores budget in range", async () => { /* create project 80L-1.6Cr; ingest with projectSlug and budgetPaise 1e9 */ expect(lead.projectId).toBe(project.id); expect(lead.score).toBe(65); });
+it("resolves projectSlug and scores budget in range", async () => { /* create project 80L-1.6Cr; ingest with projectSlug and budgetRupees 1e9 */ expect(lead.projectId).toBe(project.id); expect(lead.score).toBe(65); });
 it("throws InvalidPhoneError for junk phone", async () => { await expect(ingestLead({ ...base, phone: "12" })).rejects.toBeInstanceOf(InvalidPhoneError); expect(await db.lead.count()).toBe(0); });
 ```
 
@@ -434,7 +434,7 @@ git commit -m "feat: add lead ingest with dedupe and lead lifecycle service"
 - Test: `tests/unit/csv.test.ts`, `tests/integration/ingest-route.test.ts`
 
 **Interfaces:**
-- Consumes: `ingestLead`, `getCurrentUser`, `parseRupeesToPaise`.
+- Consumes: `ingestLead`, `getCurrentUser`, `parseRupees`.
 - Produces:
   - `createIngestKey(name: string, source: LeadSource): Promise<{ id: string; plaintext: string }>` (plaintext `sk_live_` + 32 hex, stored as SHA-256), `resolveIngestKey(plaintext: string): Promise<IngestKey | null>` (active only; bumps `lastUsedAt`), `revokeIngestKey(id): Promise<void>`.
   - `parseLeadsCsv(text: string, source: LeadSource): { rows: NormalizedLead[]; errors: { line: number; message: string }[] }`.
@@ -451,7 +451,7 @@ Priya,9845000000,,,ask,3BHK,,
 Amit,9845099999,,,1.2Cr,,,vip`;
 it("parses valid rows and reports the bad budget row by line", () => {
   const r = parseLeadsCsv(csv, "CSV_IMPORT");
-  expect(r.rows).toHaveLength(2); expect(r.rows[0].budgetPaise).toBe(450000000); expect(r.rows[1].name).toBe("Amit");
+  expect(r.rows).toHaveLength(2); expect(r.rows[0].budgetRupees).toBe(4500000); expect(r.rows[1].name).toBe("Amit");
   expect(r.errors).toEqual([{ line: 3, message: expect.stringMatching(/budget/i) }]);
 });
 it("rejects missing name or phone per row", () => { expect(parseLeadsCsv("name,phone\n,9845012345", "CSV_IMPORT").errors[0].line).toBe(2); });
@@ -472,7 +472,7 @@ Expected: FAIL.
 
 - [ ] **Step 3: Implement**
 
-CSV parsing by hand (split lines, handle quoted commas with a small state machine; no dependency). Generic ingest body schema: `name` 1..120, `phone` string, optional `email` (email), `projectSlug`, `budget` (string|number → `parseRupeesToPaise`), `configuration`, `locality`, `notes`, `externalId`. `InvalidPhoneError` → `422 { issues: [{ path: ["phone"], message: "Invalid phone number" }] }`.
+CSV parsing by hand (split lines, handle quoted commas with a small state machine; no dependency). Generic ingest body schema: `name` 1..120, `phone` string, optional `email` (email), `projectSlug`, `budget` (string|number → `parseRupees`, whole rupees), `configuration`, `locality`, `notes`, `externalId`. `InvalidPhoneError` → `422 { issues: [{ path: ["phone"], message: "Invalid phone number" }] }`.
 
 - [ ] **Step 4: Run tests to verify they pass**
 
@@ -513,7 +513,7 @@ it("verifies a correct sha256 signature and rejects a wrong one", () => { const 
 it("extracts leadgen changes and ignores other fields", () => { const ids = extractLeadgenIds({ object: "page", entry: [{ id: "p1", changes: [{ field: "leadgen", value: { leadgen_id: "L1", page_id: "p1", form_id: "f1", created_time: 1 } }, { field: "feed", value: {} }] }] }); expect(ids).toEqual([{ leadgenId: "L1", pageId: "p1", formId: "f1", createdTime: 1 }]); });
 it("maps field_data into a NormalizedLead", () => {
   const n = mapFieldData({ id: "L1", created_time: "2026-10-26T10:00:00+0000", form_id: "f1", field_data: [{ name: "full_name", values: ["Rohan"] }, { name: "phone_number", values: ["+919845012345"] }, { name: "email", values: ["r@x.in"] }, { name: "what_is_your_budget?", values: ["45L"] }, { name: "preferred_bhk", values: ["2BHK"] }, { name: "preferred_location", values: ["Whitefield"] }, { name: "when_to_buy", values: ["3 months"] }] });
-  expect(n).toMatchObject({ source: "META_LEAD_AD", name: "Rohan", phone: "+919845012345", email: "r@x.in", budgetPaise: 450000000, configuration: "2BHK", locality: "Whitefield", externalId: "L1" });
+  expect(n).toMatchObject({ source: "META_LEAD_AD", name: "Rohan", phone: "+919845012345", email: "r@x.in", budgetRupees: 4500000, configuration: "2BHK", locality: "Whitefield", externalId: "L1" });
   expect(n.notes).toContain("when_to_buy: 3 months");
 });
 
@@ -567,8 +567,8 @@ git commit -m "feat: add Meta Lead Ads webhook with idempotent ingestion"
 - Consumes: `getEnv`, `getMetaAccessToken`.
 - Produces (in `gateway.ts`):
   ```ts
-  export type Campaign = { id: string; name: string; status: string; objective: string; dailyBudgetPaise?: number };
-  export type Insights = { spendPaise: number; impressions: number; clicks: number; leads: number; costPerLeadPaise?: number };
+  export type Campaign = { id: string; name: string; status: string; objective: string; dailyBudgetRupees?: number };
+  export type Insights = { spendRupees: number; impressions: number; clicks: number; leads: number; costPerLeadRupees?: number };
   export type LeadForm = { id: string; name: string; status: string; leadsCount: number };
   export type DateRange = { since: string; until: string }; // YYYY-MM-DD
   export interface MetaAdsGateway {
@@ -581,7 +581,7 @@ git commit -m "feat: add Meta Lead Ads webhook with idempotent ingestion"
   export type ToolMap = Record<keyof MetaAdsGateway, string>;
   export const DEFAULT_TOOL_MAP: ToolMap = { listCampaigns: "ads_get_campaigns", getInsights: "ads_get_insights", listLeadForms: "ads_get_lead_forms" };
   ```
-  - `mcp-gateway.ts`: `class McpMetaAdsGateway implements MetaAdsGateway { constructor(opts: { connect: () => Promise<Client>; toolMap?: Partial<ToolMap> }) }` where `Client` is `@modelcontextprotocol/sdk/client`. Lazily connects once, calls `client.listTools()` once, caches names. Each operation: resolve name → throw `MetaToolUnavailableError` if absent → `client.callTool({ name, arguments })` → parse `content[0].text` as JSON (fall back to `structuredContent`) → normalise to the types above (`spend` in account currency → paise ×100; `dailyBudget` likewise). `createMcpClientFactory(url: string, token: string): () => Promise<Client>` uses `StreamableHTTPClientTransport(new URL(url), { requestInit: { headers: { Authorization: "Bearer " + token } } })`.
+  - `mcp-gateway.ts`: `class McpMetaAdsGateway implements MetaAdsGateway { constructor(opts: { connect: () => Promise<Client>; toolMap?: Partial<ToolMap> }) }` where `Client` is `@modelcontextprotocol/sdk/client`. Lazily connects once, calls `client.listTools()` once, caches names. Each operation: resolve name → throw `MetaToolUnavailableError` if absent → `client.callTool({ name, arguments })` → parse `content[0].text` as JSON (fall back to `structuredContent`) → normalise to the types above (`spend` is already rupees for an INR account, keep as number; Graph `daily_budget` is in minor units → divide by 100). `createMcpClientFactory(url: string, token: string): () => Promise<Client>` uses `StreamableHTTPClientTransport(new URL(url), { requestInit: { headers: { Authorization: "Bearer " + token } } })`.
   - `graph-gateway.ts`: `class GraphMetaAdsGateway implements MetaAdsGateway { constructor(opts: { token: string; version: string; fetchImpl?: typeof fetch }) }` hitting `/act_{id}/campaigns?fields=id,name,status,objective,daily_budget`, `/act_{id}/insights?fields=spend,impressions,clicks,actions&time_range=...` (leads = sum of `actions[].value` where `action_type === "lead"`), `/{pageId}/leadgen_forms?fields=id,name,status,leads_count`.
   - `index.ts`: `getMetaGateway(): Promise<MetaAdsGateway>` picks by `META_GATEWAY`; throws `MetaNotConfiguredError` when no token.
 
@@ -603,17 +603,17 @@ function makeConnect(tools: Record<string, (args: any) => unknown>) {
     return client;
   };
 }
-it("lists campaigns through the default tool name and converts budget to paise", async () => {
+it("lists campaigns through the default tool name and converts daily_budget minor units to rupees", async () => {
   const gw = new McpMetaAdsGateway({ connect: makeConnect({ ads_get_campaigns: () => ({ data: [{ id: "c1", name: "Launch", status: "ACTIVE", objective: "OUTCOME_LEADS", daily_budget: "2000" }] }) }) });
-  expect(await gw.listCampaigns("act_1")).toEqual([{ id: "c1", name: "Launch", status: "ACTIVE", objective: "OUTCOME_LEADS", dailyBudgetPaise: 200000 }]);
+  expect(await gw.listCampaigns("act_1")).toEqual([{ id: "c1", name: "Launch", status: "ACTIVE", objective: "OUTCOME_LEADS", dailyBudgetRupees: 20 }]);
 });
-it("honours a custom tool map", async () => { const gw = new McpMetaAdsGateway({ connect: makeConnect({ get_insights_v2: () => ({ spend: "1500.50", impressions: 1000, clicks: 50, actions: [{ action_type: "lead", value: "10" }] }) }), toolMap: { getInsights: "get_insights_v2" } }); expect(await gw.getInsights("act_1", { since: "2026-10-19", until: "2026-10-26" })).toEqual({ spendPaise: 150050, impressions: 1000, clicks: 50, leads: 10, costPerLeadPaise: 15005 }); });
+it("honours a custom tool map", async () => { const gw = new McpMetaAdsGateway({ connect: makeConnect({ get_insights_v2: () => ({ spend: "1500.50", impressions: 1000, clicks: 50, actions: [{ action_type: "lead", value: "10" }] }) }), toolMap: { getInsights: "get_insights_v2" } }); expect(await gw.getInsights("act_1", { since: "2026-10-19", until: "2026-10-26" })).toEqual({ spendRupees: 1500.5, impressions: 1000, clicks: 50, leads: 10, costPerLeadRupees: 150.05 }); });
 it("throws MetaToolUnavailableError listing available tools when a mapped tool is missing", async () => { const gw = new McpMetaAdsGateway({ connect: makeConnect({ something_else: () => ({}) }) }); const err = await gw.listLeadForms("p1").catch(e => e); expect(err).toBeInstanceOf(MetaToolUnavailableError); expect(err.operation).toBe("listLeadForms"); expect(err.available).toEqual(["something_else"]); expect(err.message).toContain("ads_get_lead_forms"); });
 it("connects and lists tools only once across calls", async () => { const connect = vi.fn(makeConnect({ ads_get_campaigns: () => ({ data: [] }), ads_get_lead_forms: () => ({ data: [] }) })); const gw = new McpMetaAdsGateway({ connect }); await gw.listCampaigns("a"); await gw.listLeadForms("p"); expect(connect).toHaveBeenCalledTimes(1); });
 
 // tests/unit/graph-gateway.test.ts
 it("builds the campaigns URL with act_ prefix and bearer header", async () => { const f = vi.fn(async () => new Response(JSON.stringify({ data: [] }))); await new GraphMetaAdsGateway({ token: "t", version: "v24.0", fetchImpl: f }).listCampaigns("123"); expect(f.mock.calls[0][0]).toContain("/v24.0/act_123/campaigns?"); expect(f.mock.calls[0][1].headers.Authorization).toBe("Bearer t"); });
-it("sums lead actions into leads and computes costPerLeadPaise", async () => { ... expect(r.leads).toBe(10); expect(r.costPerLeadPaise).toBe(15005); });
+it("sums lead actions into leads and computes costPerLeadRupees", async () => { ... expect(r.leads).toBe(10); expect(r.costPerLeadRupees).toBe(150.05); });
 it("getMetaGateway throws MetaNotConfiguredError without a token", async () => { ... });
 ```
 
@@ -624,7 +624,7 @@ Expected: FAIL.
 
 - [ ] **Step 3: Implement the four files**
 
-Tool call argument names: `listCampaigns` → `{ ad_account_id }`, `getInsights` → `{ ad_account_id, time_range: { since, until } }`, `listLeadForms` → `{ page_id }`. Response normalisation accepts either `{ data: [...] }` or a bare array, and either numeric or string money fields. `costPerLeadPaise = leads > 0 ? Math.round(spendPaise / leads) : undefined`.
+Tool call argument names: `listCampaigns` → `{ ad_account_id }`, `getInsights` → `{ ad_account_id, time_range: { since, until } }`, `listLeadForms` → `{ page_id }`. Response normalisation accepts either `{ data: [...] }` or a bare array, and either numeric or string money fields. `costPerLeadRupees = leads > 0 ? Math.round((spendRupees / leads) * 100) / 100 : undefined`.
 
 - [ ] **Step 4: Run tests to verify they pass**
 
@@ -778,7 +778,7 @@ it("ownerId=unassigned returns only null owners", ...);
 // tests/ui/lead-filters.test.tsx
 it("calls onChange with the chosen stage", async () => { ... expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ stage: "QUALIFIED" })); });
 // tests/ui/lead-card.test.tsx
-it("shows name, stage badge, short budget and score", () => { render(<LeadCard lead={{ ..., budgetPaise: 450000000, score: 72, stage: "QUALIFIED" }} />); expect(screen.getByText("₹45L")).toBeInTheDocument(); expect(screen.getByText("72")).toBeInTheDocument(); expect(screen.getByText("Qualified")).toBeInTheDocument(); });
+it("shows name, stage badge, short budget and score", () => { render(<LeadCard lead={{ ..., budgetRupees: 4500000, score: 72, stage: "QUALIFIED" }} />); expect(screen.getByText("₹45L")).toBeInTheDocument(); expect(screen.getByText("72")).toBeInTheDocument(); expect(screen.getByText("Qualified")).toBeInTheDocument(); });
 ```
 
 - [ ] **Step 2: Run tests to verify they fail** → FAIL.
@@ -828,14 +828,14 @@ it("changeStageAction returns a readable error on illegal transition", async () 
 - Test: `tests/integration/pipeline-query.test.ts`, `tests/ui/pipeline-board.test.tsx`
 
 **Interfaces:**
-- Consumes: `changeStageAction`, `STAGE_ORDER`, `STAGE_COLORS`, `formatPaiseShort`.
-- Produces: `getPipeline(filters?: { projectId?: string; ownerId?: string; includeLost?: boolean }): Promise<{ stage: LeadStage; count: number; totalBudgetPaise: number; leads: PipelineCardItem[] }[]>` in `STAGE_ORDER` order, `LOST` only when `includeLost`. `<PipelineBoard columns onMove(leadId, to)>`: `≥ lg` DnD via `@dnd-kit/core` `DndContext` with one `useDroppable` per column; `< lg` a horizontal snap-scroll row (`snap-x snap-mandatory`) with a stage selector pill bar, each card having a `Move` button opening `<MoveSheet>` which lists legal stages.
+- Consumes: `changeStageAction`, `STAGE_ORDER`, `STAGE_COLORS`, `formatRupeesShort`.
+- Produces: `getPipeline(filters?: { projectId?: string; ownerId?: string; includeLost?: boolean }): Promise<{ stage: LeadStage; count: number; totalBudgetRupees: number; leads: PipelineCardItem[] }[]>` in `STAGE_ORDER` order, `LOST` only when `includeLost`. `<PipelineBoard columns onMove(leadId, to)>`: `≥ lg` DnD via `@dnd-kit/core` `DndContext` with one `useDroppable` per column; `< lg` a horizontal snap-scroll row (`snap-x snap-mandatory`) with a stage selector pill bar, each card having a `Move` button opening `<MoveSheet>` which lists legal stages.
 
 - [ ] **Step 1: Write the failing tests**
 
 ```ts
 // tests/integration/pipeline-query.test.ts
-it("groups leads by stage with totals and omits LOST by default", async () => { ... expect(cols.map(c => c.stage)).toEqual(STAGE_ORDER.filter(s => s !== "LOST")); expect(cols.find(c => c.stage === "NEW")?.totalBudgetPaise).toBe(900000000); });
+it("groups leads by stage with totals and omits LOST by default", async () => { ... expect(cols.map(c => c.stage)).toEqual(STAGE_ORDER.filter(s => s !== "LOST")); expect(cols.find(c => c.stage === "NEW")?.totalBudgetRupees).toBe(9000000); });
 it("includes LOST when asked", ...);
 
 // tests/ui/pipeline-board.test.tsx
@@ -888,13 +888,13 @@ it("links to settings when not configured", () => { render(<ErrorPanel error={ne
 - Test: `tests/integration/projects.test.ts`, `tests/integration/team.test.ts`, `tests/ui/project-form.test.tsx`
 
 **Interfaces:**
-- Produces: `projectInputSchema` (`name` 1..80, `slug` `^[a-z0-9-]+$`, `city`, `priceMin`/`priceMax` as rupee strings → paise, `priceMin ≤ priceMax`), `createProject(input)`, `updateProject(id, input)`, `setProjectActive(id, active)`. `inviteUser(input: { email; name; role; phone? }): Promise<{ user; temporaryPassword: string }>` (12-char random, hashed), `setUserActive(id, active)`, `resetPassword(id): Promise<string>`. Settings page reads `?tab=` (`projects | team | integrations | import`), ADMIN only.
+- Produces: `projectInputSchema` (`name` 1..80, `slug` `^[a-z0-9-]+$`, `city`, `priceMin`/`priceMax` as rupee strings → whole rupees, `priceMin ≤ priceMax`), `createProject(input)`, `updateProject(id, input)`, `setProjectActive(id, active)`. `inviteUser(input: { email; name; role; phone? }): Promise<{ user; temporaryPassword: string }>` (12-char random, hashed), `setUserActive(id, active)`, `resetPassword(id): Promise<string>`. Settings page reads `?tab=` (`projects | team | integrations | import`), ADMIN only.
 
 - [ ] **Step 1: Write the failing tests**
 
 ```ts
 it("rejects priceMin > priceMax", () => expect(projectInputSchema.safeParse({ name: "A", slug: "a", city: "B", priceMin: "1Cr", priceMax: "80L" }).success).toBe(false));
-it("creates a project converting rupee strings to paise", async () => { const p = await createProject({ name: "K", slug: "k", city: "Bengaluru", priceMin: "80L", priceMax: "1.6Cr" }); expect(p.priceMinPaise).toBe(800000000); expect(p.priceMaxPaise).toBe(1600000000); });
+it("creates a project converting rupee strings to whole rupees", async () => { const p = await createProject({ name: "K", slug: "k", city: "Bengaluru", priceMin: "80L", priceMax: "1.6Cr" }); expect(p.priceMinRupees).toBe(8000000); expect(p.priceMaxRupees).toBe(16000000); });
 it("inviteUser lower-cases email, hashes the temp password and returns it once", async () => { const r = await inviteUser({ email: "A@SC.Studio", name: "A", role: "AGENT" }); expect(r.user.email).toBe("a@sc.studio"); expect(await verifyPassword(r.temporaryPassword, r.user.passwordHash)).toBe(true); });
 it("inviteUser rejects duplicate email with DuplicateEmailError", ...);
 // ui: project-form shows a field error under price when min > max
