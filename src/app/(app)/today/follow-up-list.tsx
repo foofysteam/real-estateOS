@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { FormError } from "@/components/ui/field";
 import type { FollowUpWithLead } from "@/lib/leads/queries";
 import { useAction } from "@/lib/use-action";
 import { completeFollowUpAction } from "./actions";
