@@ -71,7 +71,7 @@ FollowUp       id, leadId, ownerId, dueAt, channel (CALL|WHATSAPP|VISIT|EMAIL),
                note?, completedAt?
 IngestKey      id, name, source, keyHash, lastUsedAt?, isActive
 WebhookEvent   id, provider ("meta"), externalId (unique per provider),
-               receivedAt, processedAt?, status (RECEIVED|PROCESSED|FAILED),
+               receivedAt, processedAt?, status (RECEIVED|PROCESSING|PROCESSED|FAILED),
                error?, raw (json)
 MetaConnection id (singleton row id=1), pageId, adAccountId,
                accessTokenEnc, leadFormIds (string[]), mcpUrl, updatedAt
