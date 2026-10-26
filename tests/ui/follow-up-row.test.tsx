@@ -38,6 +38,20 @@ describe("FollowUpRow", () => {
     expect(onDone).toHaveBeenCalledWith(item.id);
   });
 
+  it("links the lead's text block to the lead, separate from the action buttons", () => {
+    render(<FollowUpRow item={item} onDone={vi.fn()} />);
+    const leadLink = screen.getByRole("link", { name: /rohan mehta/i });
+    expect(leadLink).toHaveAttribute("href", "/leads/lead_1");
+    expect(leadLink).toHaveTextContent("Krishvi Triple One");
+    expect(leadLink).not.toContainElement(screen.getByRole("button", { name: /done/i }));
+    expect(leadLink).not.toContainElement(screen.getByRole("link", { name: /call/i }));
+  });
+
+  it("shows an inline error under the row", () => {
+    render(<FollowUpRow item={item} onDone={vi.fn()} error="Lead is closed" />);
+    expect(screen.getByRole("alert")).toHaveTextContent("Lead is closed");
+  });
+
   it("shows the IST date and time for an overdue item", () => {
     const overdueItem = { ...item, id: "fu_2", dueAt: new Date("2026-10-23T10:00:00Z") };
     render(<FollowUpRow item={overdueItem} onDone={vi.fn()} overdue />);

@@ -1,12 +1,13 @@
 "use client";
 
-import { Check, MessageCircle, Phone } from "lucide-react";
+import Link from "next/link";
+import { Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { FormError } from "@/components/ui/field";
 import { StageBadge } from "@/components/leads/stage-badge";
 import { formatIstDateTime, formatIstTime } from "@/lib/dates";
-import { toTelLink, toWaLink } from "@/lib/phone";
 import type { FollowUpWithLead } from "@/lib/leads/queries";
+import { CallLink, WhatsAppLink } from "./contact-links";
 
 export function FollowUpRow({
   item,
@@ -26,7 +27,10 @@ export function FollowUpRow({
   const { lead } = item;
   return (
     <li className="flex flex-col gap-3 border-b border-border px-4 py-3 last:border-b-0 lg:min-h-11 lg:flex-row lg:flex-wrap lg:items-center lg:gap-x-4 lg:gap-y-1 lg:py-1.5">
-      <div className="flex min-h-14 min-w-0 flex-1 flex-col justify-center gap-1 lg:min-h-0 lg:flex-row lg:items-center lg:gap-4">
+      <Link
+        href={`/leads/${lead.id}`}
+        className="-mx-2 flex min-h-14 min-w-0 flex-1 flex-col justify-center gap-1 rounded-md px-2 hover:bg-surface-2 lg:min-h-11 lg:flex-row lg:items-center lg:gap-4"
+      >
         <div className="flex min-w-0 items-center gap-2 lg:flex-1">
           <span className="truncate font-medium text-fg">{lead.name}</span>
           <StageBadge stage={lead.stage} className="shrink-0" />
@@ -42,20 +46,10 @@ export function FollowUpRow({
             </>
           )}
         </div>
-      </div>
+      </Link>
       <div className="grid grid-cols-3 gap-2 lg:flex lg:shrink-0">
-        <Button asChild variant="secondary" size="sm">
-          <a href={toTelLink(lead.phone)}>
-            <Phone aria-hidden="true" />
-            Call
-          </a>
-        </Button>
-        <Button asChild variant="secondary" size="sm">
-          <a href={toWaLink(lead.phone)} target="_blank" rel="noopener noreferrer">
-            <MessageCircle aria-hidden="true" />
-            WhatsApp
-          </a>
-        </Button>
+        <CallLink phone={lead.phone} />
+        <WhatsAppLink phone={lead.phone} />
         <Button variant="primary" size="sm" disabled={pending} onClick={() => onDone(item.id)}>
           <Check aria-hidden="true" />
           Done
