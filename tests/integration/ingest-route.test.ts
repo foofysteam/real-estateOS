@@ -64,6 +64,16 @@ describe("POST /api/ingest", () => {
     expect((await db.lead.findFirstOrThrow()).budgetRupees).toBe(7500000);
   });
 
+  it("returns 422 at budget when the budget exceeds MAX_RUPEES", async () => {
+    const k = await createIngestKey("site", "WEBSITE");
+    for (const budget of ["300Cr", 3_000_000_000]) {
+      const res = await POST(req({ name: "R", phone: "9845012345", budget }, k.plaintext));
+      expect(res.status).toBe(422);
+      expect((await res.json()).issues).toEqual([expect.objectContaining({ path: ["budget"], message: "Budget too large" })]);
+    }
+    expect(await db.lead.count()).toBe(0);
+  });
+
   it("returns 202 on duplicate", async () => {
     const k = await createIngestKey("site", "WEBSITE");
     const res1 = await POST(req({ name: "R", phone: "9845012345" }, k.plaintext));

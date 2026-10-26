@@ -1,5 +1,5 @@
 import { getEnv } from "@/lib/env";
-import { parseRupees } from "@/lib/money";
+import { MAX_RUPEES, parseRupees } from "@/lib/money";
 import type { NormalizedLead } from "@/lib/leads/types";
 
 export type MetaLead = {
@@ -9,6 +9,12 @@ export type MetaLead = {
   form_id?: string;
   ad_id?: string;
 };
+
+/** A budget answer we can store; anything unparseable or beyond MAX_RUPEES stays in notes instead. */
+function storableBudget(value: string): number | undefined {
+  const rupees = parseRupees(value);
+  return rupees !== null && rupees <= MAX_RUPEES ? rupees : undefined;
+}
 
 /** Spec §5.4: map Lead Ads field_data into a NormalizedLead; unmatched fields become `key: value` note lines. */
 export function mapFieldData(lead: MetaLead): NormalizedLead {
@@ -27,7 +33,7 @@ export function mapFieldData(lead: MetaLead): NormalizedLead {
     else if (key === "last_name") lastName = value;
     else if (key === "phone_number") fields.phone = value;
     else if (key === "email") fields.email = value;
-    else if (key.includes("budget") && fields.budget === undefined && parseRupees(value) !== null) fields.budget = value;
+    else if (key.includes("budget") && fields.budget === undefined && storableBudget(value) !== undefined) fields.budget = value;
     else if ((key.includes("configuration") || key.includes("bhk")) && fields.configuration === undefined) fields.configuration = value;
     else if ((key.includes("location") || key.includes("locality")) && fields.locality === undefined) fields.locality = value;
     else notes.push(`${field.name}: ${value}`);
@@ -39,7 +45,7 @@ export function mapFieldData(lead: MetaLead): NormalizedLead {
     name: name || "Unknown",
     phone: fields.phone ?? "",
     email: fields.email,
-    budgetRupees: fields.budget === undefined ? undefined : (parseRupees(fields.budget) ?? undefined),
+    budgetRupees: fields.budget === undefined ? undefined : storableBudget(fields.budget),
     configuration: fields.configuration,
     locality: fields.locality,
     notes: notes.length ? notes.join("\n") : undefined,

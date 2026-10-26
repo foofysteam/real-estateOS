@@ -1,7 +1,7 @@
 import type { LeadSource } from "@/generated/prisma/client";
 import { ingestLead, InvalidPhoneError } from "@/lib/leads/ingest";
 import { normalizedLeadSchema, type NormalizedLead } from "@/lib/leads/types";
-import { parseRupees } from "@/lib/money";
+import { MAX_RUPEES, parseRupees } from "@/lib/money";
 
 export type CsvError = { line: number; message: string };
 export type CsvImportResult = { created: number; deduplicated: number; errors: CsvError[] };
@@ -96,6 +96,10 @@ function parseRows(text: string, source: LeadSource): { rows: ParsedRow[]; error
       const parsed = parseRupees(budget);
       if (parsed === null) {
         errors.push({ line, message: `Invalid budget "${budget}"` });
+        continue;
+      }
+      if (parsed > MAX_RUPEES) {
+        errors.push({ line, message: "Budget too large" });
         continue;
       }
       budgetRupees = parsed;

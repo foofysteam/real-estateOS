@@ -2,7 +2,8 @@
 
 import { useState, useTransition } from "react";
 
-export type ActionResult = { ok: true } | { ok: false; error: string };
+/** `field` names the input a failure belongs to, when the action can tell. */
+export type ActionResult = { ok: true } | { ok: false; error: string; field?: string };
 
 export const GENERIC_ERROR = "Something went wrong. Try again.";
 

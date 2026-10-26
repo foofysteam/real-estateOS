@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { LeadSource } from "@/generated/prisma/client";
+import { MAX_RUPEES } from "@/lib/money";
 
 /** Spec §5.1: every inbound source maps into this shape before ingest. */
 export type NormalizedLead = {
@@ -22,7 +23,7 @@ export const normalizedLeadSchema: z.ZodType<NormalizedLead> = z.object({
   phone: z.string().min(1),
   email: z.email().optional(),
   projectSlug: z.string().optional(),
-  budgetRupees: z.number().int().nonnegative().optional(),
+  budgetRupees: z.number().int().nonnegative().max(MAX_RUPEES, "Budget too large").optional(),
   configuration: z.string().optional(),
   locality: z.string().optional(),
   notes: z.string().optional(),

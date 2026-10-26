@@ -56,4 +56,10 @@ describe("parseLeadsCsv", () => {
     expect(r.rows).toEqual([]);
     expect(r.errors).toEqual([{ line: 1, message: expect.stringMatching(/phone/i) }]);
   });
+
+  it("reports a budget above MAX_RUPEES as a row error", () => {
+    const r = parseLeadsCsv("name,phone,budget\nRohan,9845012345,300Cr\nPriya,9845000000,45L", "CSV_IMPORT");
+    expect(r.errors).toEqual([{ line: 2, message: "Budget too large" }]);
+    expect(r.rows.map((x) => x.name)).toEqual(["Priya"]);
+  });
 });

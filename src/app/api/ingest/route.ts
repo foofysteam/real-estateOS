@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { resolveIngestKey } from "@/lib/ingest-keys";
 import { ingestLead, InvalidPhoneError } from "@/lib/leads/ingest";
-import { parseRupees } from "@/lib/money";
+import { MAX_RUPEES, parseRupees } from "@/lib/money";
 
 const bodySchema = z.object({
   name: z.string().trim().min(1).max(120),
@@ -15,6 +15,10 @@ const bodySchema = z.object({
       const rupees = parseRupees(value);
       if (rupees === null) {
         ctx.addIssue({ code: "custom", message: "Invalid budget" });
+        return z.NEVER;
+      }
+      if (rupees > MAX_RUPEES) {
+        ctx.addIssue({ code: "custom", message: "Budget too large" });
         return z.NEVER;
       }
       return rupees;

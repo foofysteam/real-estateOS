@@ -1,5 +1,8 @@
 // All money in Sales OS is whole integer rupees.
 
+/** Largest rupee amount a 32-bit Postgres Int column can hold. */
+export const MAX_RUPEES = 2_147_483_647;
+
 const UNIT_MULTIPLIERS: Record<string, number> = {
   k: 1e3,
   l: 1e5,

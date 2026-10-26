@@ -5,7 +5,7 @@ import { z } from "zod";
 import { db } from "@/lib/db";
 import { FollowUpChannel, LeadStage } from "@/generated/prisma/enums";
 import { ForbiddenError, requireUser } from "@/lib/auth/current-user";
-import { parseRupees } from "@/lib/money";
+import { MAX_RUPEES, parseRupees } from "@/lib/money";
 import type { ActionResult } from "@/lib/use-action";
 import {
   addNote,
@@ -143,6 +143,7 @@ const patchSchema = z.object({
     if (v == null) return v;
     const rupees = parseRupees(v);
     if (rupees == null) ctx.addIssue({ code: "custom", message: "Enter a budget like 45L or 1.2Cr" });
+    else if (rupees > MAX_RUPEES) ctx.addIssue({ code: "custom", message: "Budget too large" });
     return rupees ?? undefined;
   }),
   configuration: clearable(60),
@@ -152,8 +153,14 @@ const patchSchema = z.object({
 
 export async function updateFieldsAction(leadId: string, patch: FieldsPatch): Promise<ActionResult> {
   const user = await requireUser();
+  // Field-level validation comes back with the field it belongs to so the sheet can show it in place.
+  const parsed = patchSchema.safeParse(patch);
+  if (!parsed.success) {
+    const issue = parsed.error.issues[0];
+    return { ok: false, error: issue?.message ?? "Invalid input", field: issue ? String(issue.path[0]) : undefined };
+  }
   return run(async () => {
-    const { budget, ...rest } = patchSchema.parse(patch);
+    const { budget, ...rest } = parsed.data;
     const leadIdOk = id.parse(leadId);
     if (rest.projectId) {
       const project = await db.project.findUnique({ where: { id: rest.projectId }, select: { id: true } });

@@ -78,7 +78,17 @@ describe("lead detail actions", () => {
     expect(await actions.updateFieldsAction(leadId, { budget: "lots" })).toEqual({
       ok: false,
       error: expect.stringMatching(/budget/i),
+      field: "budget",
     });
+  });
+
+  it("updateFieldsAction rejects a budget above MAX_RUPEES as a budget field error", async () => {
+    expect(await actions.updateFieldsAction(leadId, { budget: "300Cr" })).toEqual({
+      ok: false,
+      error: "Budget too large",
+      field: "budget",
+    });
+    expect((await lead()).budgetRupees).toBeNull();
   });
 
   it("assignLeadAction assigns, unassigns and rejects an unknown user", async () => {

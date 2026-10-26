@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { Prisma, type Project } from "@/generated/prisma/client";
-import { parseRupees } from "@/lib/money";
+import { MAX_RUPEES, parseRupees } from "@/lib/money";
 
 export class DuplicateSlugError extends Error {
   constructor(slug: string) {
@@ -16,9 +16,6 @@ export class ProjectNotFoundError extends Error {
     this.name = "ProjectNotFoundError";
   }
 }
-
-// Prices are stored in a 32-bit Int column.
-const MAX_RUPEES = 2_147_483_647;
 
 /** A rupee string ("80L", "1.6Cr", "4500000") → whole rupees; an issue at this field's path otherwise. */
 const rupees = z

@@ -96,6 +96,22 @@ describe("mapFieldData", () => {
   });
 });
 
+describe("mapFieldData budget bound", () => {
+  it("keeps the lead but moves a budget above MAX_RUPEES into notes", () => {
+    const n = mapFieldData({
+      id: "L3",
+      created_time: "2026-10-26T10:00:00+0000",
+      field_data: [
+        { name: "full_name", values: ["Rohan"] },
+        { name: "phone_number", values: ["9845012345"] },
+        { name: "budget", values: ["500Cr"] },
+      ],
+    });
+    expect(n.budgetRupees).toBeUndefined();
+    expect(n.notes).toBe("budget: 500Cr");
+  });
+});
+
 describe("fetchLeadgen", () => {
   const graphLead = {
     id: "L1",

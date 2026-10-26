@@ -44,12 +44,14 @@ const TEXT_FIELDS: { key: Exclude<keyof Values, "projectId">; label: string; typ
 export function EditFieldsSheet({ lead, projects }: { lead: EditableLead; projects: { id: string; name: string }[] }) {
   const [open, setOpen] = useState(false);
   const { pending, error, run, clearError } = useAction();
+  const [errorField, setErrorField] = useState<string | null>(null);
 
   return (
     <Sheet
       open={open}
       onOpenChange={(o) => {
         clearError();
+        setErrorField(null);
         setOpen(o);
       }}
     >
@@ -65,7 +67,12 @@ export function EditFieldsSheet({ lead, projects }: { lead: EditableLead; projec
           projects={projects}
           pending={pending}
           error={error}
-          onSubmit={(patch) => run(() => updateFieldsAction(lead.id, patch), () => setOpen(false))}
+          errorField={errorField}
+          onSubmit={async (patch) => {
+            setErrorField(null);
+            const result = await run(() => updateFieldsAction(lead.id, patch), () => setOpen(false));
+            if (!result.ok && result.field) setErrorField(result.field);
+          }}
         />
       </SheetContent>
     </Sheet>
@@ -77,17 +84,21 @@ function EditForm({
   projects,
   pending,
   error,
+  errorField,
   onSubmit,
 }: {
   lead: EditableLead;
   projects: { id: string; name: string }[];
   pending: boolean;
   error: string | null;
+  /** When set, `error` belongs to this field and shows under it instead of at the form level. */
+  errorField: string | null;
   onSubmit: (patch: FieldsPatch) => void;
 }) {
   const initial = initialValues(lead);
   const [values, setValues] = useState(initial);
   const set = (key: keyof Values, value: string) => setValues((v) => ({ ...v, [key]: value }));
+  const fieldError = (key: keyof Values) => (error && errorField === key ? error : undefined);
 
   function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -101,9 +112,11 @@ function EditForm({
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-4">
       {TEXT_FIELDS.map(({ key, label, type, hint }) => (
-        <Field key={key} id={`edit-${key}`} label={label}>
+        <Field key={key} id={`edit-${key}`} label={label} error={fieldError(key)}>
           <Input
             id={`edit-${key}`}
+            aria-invalid={fieldError(key) ? true : undefined}
+            aria-describedby={fieldError(key) ? `edit-${key}-error` : undefined}
             type={type ?? "text"}
             placeholder={hint}
             value={values[key]}
@@ -128,7 +141,7 @@ function EditForm({
           ))}
         </select>
       </Field>
-      <FormError error={error} />
+      <FormError error={errorField && errorField in initial ? null : error} />
       <Button type="submit" disabled={pending}>
         Save
       </Button>
