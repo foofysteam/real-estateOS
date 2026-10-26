@@ -1,7 +1,7 @@
 import { db } from "@/lib/db";
 import type { FollowUp, FollowUpChannel, Lead, LeadEvent, LeadStage, Prisma } from "@/generated/prisma/client";
 import { computeScore } from "@/lib/score";
-import { canTransition } from "@/lib/stages";
+import { canTransition, isTerminal } from "@/lib/stages";
 
 type Tx = Prisma.TransactionClient;
 
@@ -58,10 +58,13 @@ export function changeStage(
     if (to === "LOST" && !lostReason) throw new LostReasonRequiredError();
     const payload = to === "LOST" ? { from: lead.stage, to, lostReason } : { from: lead.stage, to };
     await tx.leadEvent.create({ data: { leadId, actorId, type: "STAGE_CHANGED", payload } });
-    return tx.lead.update({
+    const updated = await tx.lead.update({
       where: { id: leadId },
       data: { stage: to, lostReason: to === "LOST" ? lostReason : null },
     });
+    if (!isTerminal(to)) return updated;
+    await tx.followUp.updateMany({ where: { leadId, completedAt: null }, data: { completedAt: new Date() } });
+    return recomputeNextFollowUp(tx, leadId);
   });
 }
 
@@ -87,8 +90,9 @@ export type LeadFieldPatch = Partial<
 export function updateLeadFields(leadId: string, patch: LeadFieldPatch, actorId: string): Promise<Lead> {
   return db.$transaction(async (tx) => {
     const lead = await findLead(tx, leadId);
-    const fields = Object.keys(patch).filter((k) => patch[k as keyof LeadFieldPatch] !== undefined);
-    const merged = { ...lead, ...patch };
+    const clean = Object.fromEntries(Object.entries(patch).filter(([, v]) => v !== undefined)) as LeadFieldPatch;
+    const fields = Object.keys(clean);
+    const merged = { ...lead, ...clean };
     const project = merged.projectId ? await tx.project.findUnique({ where: { id: merged.projectId } }) : null;
     const score = computeScore({ ...merged, project });
     await tx.leadEvent.create({ data: { leadId, actorId, type: "FIELD_UPDATED", payload: { fields } } });
@@ -97,7 +101,7 @@ export function updateLeadFields(leadId: string, patch: LeadFieldPatch, actorId:
         data: { leadId, actorId, type: "SCORE_CHANGED", payload: { from: lead.score, to: score } },
       });
     }
-    return tx.lead.update({ where: { id: leadId }, data: { ...patch, score } });
+    return tx.lead.update({ where: { id: leadId }, data: { ...clean, score } });
   });
 }
 

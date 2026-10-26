@@ -100,6 +100,22 @@ describe("lead service", () => {
     expect(events.find((e) => e.type === "SCORE_CHANGED")?.payload).toEqual({ from: 45, to: 55 });
   });
 
+  it("updateLeadFields ignores undefined patch keys when scoring and saving", async () => {
+    const project = await db.project.create({
+      data: { name: "Krishvi", slug: "krishvi", city: "Bengaluru", priceMinRupees: 8_000_000, priceMaxRupees: 16_000_000 },
+    });
+    await updateLeadFields(leadId, { email: "r@x.in", budgetRupees: 10_000_000, projectId: project.id, locality: "Whitefield" }, actor.id);
+    const before = await db.lead.findUniqueOrThrow({ where: { id: leadId } });
+    expect(before.score).toBe(80);
+    await updateLeadFields(leadId, { configuration: "3BHK", email: undefined, budgetRupees: undefined }, actor.id);
+    const after = await db.lead.findUniqueOrThrow({ where: { id: leadId } });
+    expect(after.email).toBe("r@x.in");
+    expect(after.budgetRupees).toBe(10_000_000);
+    expect(after.score).toBe(before.score + 10);
+    const last = (await eventsOf(leadId)).slice(-2);
+    expect(last.map((e) => e.payload)).toEqual([{ fields: ["configuration"] }, { from: 80, to: 90 }]);
+  });
+
   it("updateLeadFields skips SCORE_CHANGED when the score is unchanged", async () => {
     await updateLeadFields(leadId, { name: "Rohan M" }, actor.id);
     const types = (await eventsOf(leadId)).map((e) => e.type);
@@ -141,5 +157,18 @@ describe("lead service", () => {
     const types = (await eventsOf(leadId)).map((e) => e.type);
     expect(types.filter((t) => t === "FOLLOW_UP_SCHEDULED")).toHaveLength(2);
     expect(types.filter((t) => t === "FOLLOW_UP_COMPLETED")).toHaveLength(2);
+  });
+
+  it("moving to LOST closes open follow-ups and clears nextFollowUpAt", async () => {
+    const now = Date.now();
+    await scheduleFollowUp(leadId, { dueAt: new Date(now + DAY), channel: "CALL", ownerId: agent.id }, actor.id);
+    await scheduleFollowUp(leadId, { dueAt: new Date(now + 2 * DAY), channel: "VISIT", ownerId: agent.id }, actor.id);
+    const l = await changeStage(leadId, "LOST", actor.id, { lostReason: "Bought elsewhere" });
+    expect(l.nextFollowUpAt).toBeNull();
+    const followUps = await db.followUp.findMany({ where: { leadId } });
+    expect(followUps).toHaveLength(2);
+    expect(followUps.every((f) => f.completedAt !== null)).toBe(true);
+    expect((await db.lead.findUniqueOrThrow({ where: { id: leadId } })).nextFollowUpAt).toBeNull();
+    expect((await lastEvent(leadId)).type).toBe("STAGE_CHANGED");
   });
 });
