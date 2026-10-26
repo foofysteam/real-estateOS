@@ -33,7 +33,9 @@ Single tenant. One organisation per deployment. No per-org tables.
   `:root` and `.dark`. No UI kit dependency beyond Radix primitives
   (`@radix-ui/react-*`) and `lucide-react` icons.
 - Data: PostgreSQL 16, Prisma 7.10 with `@prisma/adapter-pg`.
-- Validation: Zod 4 at every boundary (API input, env, webhook payloads).
+- Validation: Zod 4 at every boundary (API input, env). Phase 1 parses Meta
+  webhook and Graph payloads with guarded hand-written checks (tested);
+  Zod schemas for them are a later hardening item.
 - Tests: Vitest 5. Unit tests for all `src/lib/**`. Integration tests for
   every route handler against a real Postgres test database
   (`DATABASE_URL_TEST`). Component tests with Testing Library for the
@@ -111,9 +113,10 @@ clamp 0..100
 
 Inbound lead with a phone that already exists (after E.164 normalisation)
 does **not** create a new Lead. It appends a `DUPLICATE_INBOUND` event
-with the full normalised payload, sets `nextFollowUpAt = now` if the lead
-is not `BOOKED`/`LOST`, and returns the existing lead id with
-`deduplicated: true`. Email is never used for dedup (shared family
+with the full normalised payload, creates an open `FollowUp` (channel
+`CALL`, due now, owner = lead owner or none) so the lead resurfaces on
+Today, unless the lead is `BOOKED`/`LOST`, and returns the existing lead
+id with `deduplicated: true`. Email is never used for dedup (shared family
 emails are common).
 
 ## 5. Ingestion
