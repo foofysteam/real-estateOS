@@ -1,7 +1,8 @@
 import { db } from "@/lib/db";
-import type { FollowUp, Lead, Prisma, Project, Role, User } from "@/generated/prisma/client";
+import type { FollowUp, Lead, LeadStage, Prisma, Project, Role, User } from "@/generated/prisma/client";
 import { istDayBounds } from "@/lib/dates";
-import { UNASSIGNED, type LeadFilters, type LeadListItem, type LeadPage } from "@/lib/leads/filters";
+import { UNASSIGNED, type LeadFilters, type LeadListItem, type LeadPage, type PipelineFilters } from "@/lib/leads/filters";
+import { STAGE_ORDER } from "@/lib/stages";
 
 export type FollowUpWithLead = FollowUp & {
   lead: Pick<Lead, "id" | "name" | "phone" | "stage"> & { project: Pick<Project, "id" | "name" | "slug"> | null };
@@ -58,7 +59,9 @@ export async function getTodayBoard(user: { id: string; role: Role }, now = new 
 export {
   leadFiltersSchema,
   parseLeadFilters,
+  parsePipelineFilters,
   type LeadFilters,
+  type PipelineFilters,
   type LeadListItem,
   type LeadPage,
 } from "@/lib/leads/filters";
@@ -149,4 +152,57 @@ export async function getLeadDetail(id: string): Promise<LeadDetail | null> {
     ? await db.user.findMany({ where: { id: { in: [...ids] } }, select: { id: true, name: true } })
     : [];
   return { ...lead, userNames: Object.fromEntries(users.map((u) => [u.id, u.name])) };
+}
+
+const pipelineCardSelect = {
+  id: true,
+  name: true,
+  score: true,
+  budgetRupees: true,
+  stage: true,
+  nextFollowUpAt: true,
+  owner: { select: { name: true } },
+  project: { select: { name: true } },
+} as const satisfies Prisma.LeadSelect;
+
+export type PipelineCardItem = Prisma.LeadGetPayload<{ select: typeof pipelineCardSelect }>;
+
+export type PipelineColumn = {
+  stage: LeadStage;
+  /** All matching leads in the stage; `leads` holds at most PIPELINE_COLUMN_LIMIT of them. */
+  count: number;
+  totalBudgetRupees: number;
+  leads: PipelineCardItem[];
+};
+
+export const PIPELINE_COLUMN_LIMIT = 100;
+
+/** One column per stage in STAGE_ORDER (LOST only when asked), each with its top-scored leads. */
+export async function getPipeline(filters: PipelineFilters = {}): Promise<PipelineColumn[]> {
+  const stages = STAGE_ORDER.filter((s) => filters.includeLost || s !== "LOST");
+  const where: Prisma.LeadWhereInput = { stage: { in: [...stages] } };
+  if (filters.projectId) where.projectId = filters.projectId;
+  if (filters.ownerId) where.ownerId = filters.ownerId === UNASSIGNED ? null : filters.ownerId;
+
+  const [groups, ...cards] = await Promise.all([
+    db.lead.groupBy({ by: ["stage"], where, _count: { _all: true }, _sum: { budgetRupees: true } }),
+    ...stages.map((stage) =>
+      db.lead.findMany({
+        where: { ...where, stage },
+        select: pipelineCardSelect,
+        orderBy: [{ score: "desc" }, { createdAt: "desc" }, { id: "desc" }],
+        take: PIPELINE_COLUMN_LIMIT,
+      }),
+    ),
+  ]);
+
+  return stages.map((stage, i) => {
+    const group = groups.find((g) => g.stage === stage);
+    return {
+      stage,
+      count: group?._count._all ?? 0,
+      totalBudgetRupees: group?._sum.budgetRupees ?? 0,
+      leads: cards[i],
+    };
+  });
 }

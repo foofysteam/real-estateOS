@@ -86,3 +86,34 @@ export function toLeadListItemDTO(item: LeadListItem): LeadListItemDTO {
     nextFollowUpAt: item.nextFollowUpAt?.toISOString() ?? null,
   };
 }
+
+export type PipelineFilters = {
+  projectId?: string;
+  /** A user id, or "unassigned" for leads with no owner. */
+  ownerId?: string;
+  includeLost?: boolean;
+};
+
+const pipelineFiltersSchema = z.object({
+  projectId: optional(z.string().max(64)),
+  ownerId: optional(z.string().max(64)),
+  includeLost: z.preprocess(single, z.enum(["1", "true"]).optional()).catch(undefined),
+});
+
+export function parsePipelineFilters(searchParams: ParamsInput): PipelineFilters {
+  const raw = searchParams instanceof URLSearchParams ? Object.fromEntries(searchParams) : searchParams;
+  const { projectId, ownerId, includeLost } = pipelineFiltersSchema.parse(raw);
+  return {
+    ...(projectId ? { projectId } : {}),
+    ...(ownerId ? { ownerId } : {}),
+    ...(includeLost ? { includeLost: true } : {}),
+  };
+}
+
+export function pipelineFiltersToSearchParams(filters: PipelineFilters): URLSearchParams {
+  const params = new URLSearchParams();
+  if (filters.projectId) params.set("projectId", filters.projectId);
+  if (filters.ownerId) params.set("ownerId", filters.ownerId);
+  if (filters.includeLost) params.set("includeLost", "1");
+  return params;
+}
