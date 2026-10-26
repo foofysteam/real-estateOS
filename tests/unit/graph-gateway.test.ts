@@ -2,7 +2,10 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { GraphMetaAdsGateway } from "@/lib/meta/graph-gateway";
 import { MetaNotConfiguredError } from "@/lib/meta/gateway";
 
-vi.mock("@/lib/meta/token", () => ({ getMetaAccessToken: vi.fn(async () => null) }));
+vi.mock("@/lib/meta/token", () => ({
+  getMetaAccessToken: vi.fn(async () => null),
+  getMetaConnectionSettings: vi.fn(async () => ({ token: null, mcpUrl: null })),
+}));
 
 type FetchArgs = [string, { headers: Record<string, string> }];
 
