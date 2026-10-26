@@ -22,14 +22,14 @@ async function loadOverview(): Promise<{ overview: AdsOverview } | { error: unkn
 }
 
 export default async function AdsPage() {
-  await requireUser();
+  const user = await requireUser();
   const result = await loadOverview();
 
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-col gap-6">
       <h1 className="text-xl font-semibold text-fg">Ads</h1>
       {"error" in result ? (
-        <ErrorPanel error={result.error} />
+        <ErrorPanel error={result.error} role={user.role} />
       ) : (
         <>
           <AdsSummary last7={result.overview.last7} last30={result.overview.last30} />

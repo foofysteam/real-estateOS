@@ -3,10 +3,16 @@ import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import type { Role } from "@/generated/prisma/enums";
 import { MetaNotConfiguredError, MetaToolUnavailableError } from "@/lib/meta/gateway";
 
-/** Explains why Meta data couldn't load: not connected, a missing MCP tool, or anything else. */
-export function ErrorPanel({ error }: { error: unknown }) {
+const MAX_DETAIL = 300;
+
+/**
+ * Explains why Meta data couldn't load: not connected, a missing MCP tool, or anything else.
+ * Raw text from an unexpected error is shown to admins only, capped at 300 characters.
+ */
+export function ErrorPanel({ error, role }: { error: unknown; role: Role }) {
   if (error instanceof MetaNotConfiguredError) {
     return (
       <Panel title="Meta isn't connected">
@@ -35,14 +41,17 @@ export function ErrorPanel({ error }: { error: unknown }) {
     );
   }
 
-  const message = error instanceof Error ? error.message : String(error);
   return (
     <Panel title="Couldn't load Meta data">
       <p className="text-sm text-fg-muted">Meta didn&apos;t respond as expected. Try again in a few minutes.</p>
-      <details className="text-sm">
-        <summary className="flex min-h-11 cursor-pointer items-center text-fg-muted">Details</summary>
-        <p className="font-mono text-xs break-words text-fg-muted">{message}</p>
-      </details>
+      {role === "ADMIN" && (
+        <details className="text-sm">
+          <summary className="flex min-h-11 cursor-pointer items-center text-fg-muted">Details</summary>
+          <p className="font-mono text-xs break-words text-fg-muted">
+            {(error instanceof Error ? error.message : String(error)).slice(0, MAX_DETAIL)}
+          </p>
+        </details>
+      )}
     </Panel>
   );
 }

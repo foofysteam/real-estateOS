@@ -5,6 +5,8 @@ import { ForbiddenError, requireUser } from "@/lib/auth/current-user";
 import { db } from "@/lib/db";
 import { getMetaGateway, MetaNotConfiguredError, type LeadForm } from "@/lib/meta";
 
+const MAX_ERROR = 300;
+
 export type SyncFormsResult = { ok: true; count: number } | { ok: false; error: string };
 
 /** Admin only: replaces MetaConnection.leadFormIds with the page's current lead forms. Meta failures become readable errors. */
@@ -23,7 +25,7 @@ export async function syncLeadFormsAction(): Promise<SyncFormsResult> {
   try {
     forms = await (await getMetaGateway()).listLeadForms(conn.pageId);
   } catch (err) {
-    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+    return { ok: false, error: (err instanceof Error ? err.message : String(err)).slice(0, MAX_ERROR) };
   }
 
   await db.metaConnection.update({ where: { id: 1 }, data: { leadFormIds: forms.map((f) => f.id) } });

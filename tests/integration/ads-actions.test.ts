@@ -68,6 +68,13 @@ describe("syncLeadFormsAction", () => {
     expect(await syncLeadFormsAction()).toEqual({ ok: false, error: expect.stringMatching(/rate limited/) });
   });
 
+  it("caps a long Meta error message at 300 characters", async () => {
+    listLeadForms.mockRejectedValue(new Error("boom " + "x".repeat(400)));
+    const r = await syncLeadFormsAction();
+    expect(r).toMatchObject({ ok: false, error: expect.stringMatching(/^boom/) });
+    expect((r as { error: string }).error.length).toBeLessThanOrEqual(300);
+  });
+
   it("reports a missing connection", async () => {
     await db.metaConnection.deleteMany();
     expect(await syncLeadFormsAction()).toMatchObject({ ok: false, error: expect.stringMatching(/not connected/i) });
