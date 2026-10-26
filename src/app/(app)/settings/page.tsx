@@ -5,11 +5,13 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { ForbiddenError, requireUser } from "@/lib/auth/current-user";
 import { listIngestKeys } from "@/lib/ingest-keys";
 import { getMetaConnection, getMetaEndpointInfo } from "@/lib/meta/connection";
+import { listFailedWebhookEvents } from "@/lib/meta/webhook-admin";
 import { listProjects } from "@/lib/projects";
 import { listUsers } from "@/lib/team";
 import { CsvImport } from "./import/csv-import";
 import { IngestKeys } from "./integrations/ingest-keys";
 import { MetaForm } from "./integrations/meta-form";
+import { WebhookEvents } from "./integrations/webhook-events";
 import { ProjectList } from "./projects/project-list";
 import { parseSettingsTab, type SettingsTab } from "./settings-tab";
 import { SettingsTabs } from "./settings-tabs";
@@ -46,7 +48,11 @@ async function TeamTab() {
 }
 
 async function IntegrationsTab() {
-  const [connection, keys] = await Promise.all([getMetaConnection(), listIngestKeys()]);
+  const [connection, keys, failedEvents] = await Promise.all([
+    getMetaConnection(),
+    listIngestKeys(),
+    listFailedWebhookEvents(),
+  ]);
   return (
     <div className="flex flex-col gap-8">
       <MetaForm
@@ -62,6 +68,7 @@ async function IntegrationsTab() {
         }
         endpoint={getMetaEndpointInfo()}
       />
+      <WebhookEvents events={failedEvents} />
       <IngestKeys keys={keys} />
     </div>
   );

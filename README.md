@@ -133,7 +133,7 @@ Then, in the Meta App Dashboard:
 3. Subscribe to the **`leadgen`** field.
 4. Make sure the app is installed on your Facebook Page (with the `leads_retrieval` permission) so lead-form submissions are delivered.
 
-Meta sends only a lead ID; the app fetches the lead with the stored page token (or `META_ACCESS_TOKEN`) and ingests it as source `META_LEAD_AD`. Deliveries are recorded once per lead ID, so retries are harmless.
+Meta sends only a lead ID; the app fetches the lead with the stored page token (or `META_ACCESS_TOKEN`) and ingests it as source `META_LEAD_AD`. Deliveries are recorded once per lead ID, so Meta's redeliveries of a lead that was already received are ignored rather than ingested twice. A delivery that fails (for example no token yet, or a Graph API error) is not retried automatically: it shows under **Settings → Integrations → Webhook events**, where an admin can retry it, or all of them, once the cause is fixed. Deliveries stuck in processing for over 15 minutes show there too.
 
 ## Meta Ads (MCP)
 

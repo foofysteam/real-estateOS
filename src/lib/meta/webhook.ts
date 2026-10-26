@@ -1,5 +1,6 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { db } from "@/lib/db";
+import type { WebhookStatus } from "@/generated/prisma/enums";
 import { getEnv } from "@/lib/env";
 import { ingestLead } from "@/lib/leads/ingest";
 import { fetchLeadgen } from "./graph";
@@ -42,19 +43,36 @@ export function extractLeadgenIds(body: unknown): LeadgenChange[] {
   return out;
 }
 
-async function processLeadgen(eventId: string, leadgenId: string, fetchImpl?: typeof fetch): Promise<void> {
+/**
+ * Claim a RECEIVED event, fetch its lead from the Graph API and ingest it. Returns the row's final status;
+ * an event someone else already claimed (or finished) is left alone and its current status returned.
+ */
+export async function processLeadgen(eventId: string, fetchImpl?: typeof fetch): Promise<WebhookStatus | null> {
   // Claim atomically so a redelivery scheduled before this run finishes cannot process the lead twice.
   const claimed = await db.webhookEvent.updateMany({ where: { id: eventId, status: "RECEIVED" }, data: { status: "PROCESSING" } });
-  if (claimed.count === 0) return;
+  if (claimed.count === 0) {
+    const row = await db.webhookEvent.findUnique({ where: { id: eventId }, select: { status: true } });
+    return row?.status ?? null;
+  }
   try {
+    const { externalId } = await db.webhookEvent.findUniqueOrThrow({ where: { id: eventId }, select: { externalId: true } });
     const token = await getMetaAccessToken();
     if (!token) throw new Error("No Meta access token configured");
-    const lead = await fetchLeadgen(leadgenId, token, fetchImpl);
+    const lead = await fetchLeadgen(externalId, token, fetchImpl);
     await ingestLead(lead);
     await db.webhookEvent.update({ where: { id: eventId }, data: { status: "PROCESSED", processedAt: new Date(), error: null } });
+    return "PROCESSED";
   } catch (err) {
     const error = err instanceof Error ? err.message : String(err);
-    await db.webhookEvent.update({ where: { id: eventId }, data: { status: "FAILED", error } });
+    try {
+      await db.webhookEvent.update({ where: { id: eventId }, data: { status: "FAILED", error } });
+    } catch (markErr) {
+      // Runs inside after(): never let this escape. The row stays PROCESSING and shows as stale in Settings.
+      console.error(
+        `Meta webhook event ${eventId}: could not mark FAILED (${markErr instanceof Error ? markErr.message : String(markErr)})`,
+      );
+    }
+    return "FAILED";
   }
 }
 
@@ -86,7 +104,9 @@ export async function handleMetaWebhook(
       update: {},
     });
     if (event.status === "RECEIVED") {
-      deps.schedule(() => processLeadgen(event.id, change.leadgenId, deps.fetchImpl));
+      deps.schedule(async () => {
+        await processLeadgen(event.id, deps.fetchImpl);
+      });
     }
   }
   return { status: 200, accepted: changes.length };

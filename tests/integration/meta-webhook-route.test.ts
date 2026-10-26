@@ -154,6 +154,19 @@ describe("handleMetaWebhook", () => {
     expect(fetchImpl).not.toHaveBeenCalled();
   });
 
+  it("does not throw out of the scheduled run when marking FAILED itself fails", async () => {
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    fetchImpl.mockImplementationOnce(async () => {
+      await db.webhookEvent.deleteMany(); // the FAILED update now has no row to write
+      return new Response("{}", { status: 500 });
+    });
+    const { scheduled } = await deliver(payload());
+    for (const fn of scheduled) await expect(fn()).resolves.toBeUndefined();
+    expect(errorSpy).toHaveBeenCalledWith(expect.stringMatching(/could not mark FAILED/));
+    expect(String(errorSpy.mock.calls[0][0])).not.toContain("tok");
+    errorSpy.mockRestore();
+  });
+
   it("returns 401 on bad signature and stores nothing", async () => {
     const body = payload();
     const scheduled: (() => Promise<void>)[] = [];

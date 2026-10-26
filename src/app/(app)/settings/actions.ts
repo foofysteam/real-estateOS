@@ -8,6 +8,12 @@ import { db } from "@/lib/db";
 import { createIngestKey, revokeIngestKey } from "@/lib/ingest-keys";
 import { getMetaGateway, resetMetaGateway } from "@/lib/meta";
 import { saveMetaConnection } from "@/lib/meta/connection";
+import {
+  retryAllFailedWebhookEvents,
+  retryWebhookEvent,
+  WebhookEventNotFoundError,
+} from "@/lib/meta/webhook-admin";
+import type { WebhookStatus } from "@/generated/prisma/enums";
 import { CSV_IMPORT_SOURCES, INGEST_KEY_SOURCES } from "@/lib/sources";
 import {
   createProject,
@@ -41,7 +47,7 @@ const FIELD_DOMAIN_ERRORS: [new (...args: never[]) => Error, string][] = [
   [DuplicateSlugError, "slug"],
   [DuplicateEmailError, "email"],
 ];
-const DOMAIN_ERRORS = [ProjectNotFoundError, UserNotFoundError, LastAdminError, ActionError];
+const DOMAIN_ERRORS = [ProjectNotFoundError, UserNotFoundError, LastAdminError, WebhookEventNotFoundError, ActionError];
 
 function fieldErrorsFrom(err: z.ZodError): FieldErrors {
   const out: FieldErrors = {};
@@ -164,6 +170,20 @@ export async function testMetaConnectionAction(): Promise<SettingsResult<{ count
       throw new ActionError(message.slice(0, MAX_ERROR));
     }
   });
+}
+
+const WEBHOOK_PATHS: RevalidateTarget[] = [["/settings"], ["/leads"], ["/pipeline"], ["/today"]];
+
+/** Re-run one failed or stuck Meta delivery; `status` is the row's status afterwards. */
+export async function retryWebhookEventAction(eventId: string): Promise<SettingsResult<{ status: WebhookStatus }>> {
+  return adminRun(WEBHOOK_PATHS, async () => ({ status: await retryWebhookEvent(id.parse(eventId)) }));
+}
+
+/** Re-run up to 50 failed or stuck Meta deliveries. */
+export async function retryAllFailedAction(): Promise<
+  SettingsResult<{ retried: number; processed: number; failed: number }>
+> {
+  return adminRun(WEBHOOK_PATHS, () => retryAllFailedWebhookEvents());
 }
 
 const ingestKeySchema = z.object({
