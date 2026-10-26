@@ -24,3 +24,12 @@ export function formatIstTime(d: Date): string {
   const get = (type: Intl.DateTimeFormatPartTypes) => parts.find((p) => p.type === type)?.value ?? "";
   return `${get("hour")}:${get("minute")} ${get("dayPeriod").toLowerCase()}`;
 }
+
+const dayMonthFormat = new Intl.DateTimeFormat("en-IN", { timeZone: IST, day: "numeric", month: "short" });
+
+/** IST date and time, e.g. "23 Oct, 3:30 pm". Built from parts for the same reason as formatIstTime. */
+export function formatIstDateTime(d: Date): string {
+  const parts = dayMonthFormat.formatToParts(d);
+  const get = (type: Intl.DateTimeFormatPartTypes) => parts.find((p) => p.type === type)?.value ?? "";
+  return `${get("day")} ${get("month")}, ${formatIstTime(d)}`;
+}

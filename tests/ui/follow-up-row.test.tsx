@@ -37,4 +37,10 @@ describe("FollowUpRow", () => {
     await userEvent.click(screen.getByRole("button", { name: /done/i }));
     expect(onDone).toHaveBeenCalledWith(item.id);
   });
+
+  it("shows the IST date and time for an overdue item", () => {
+    const overdueItem = { ...item, id: "fu_2", dueAt: new Date("2026-10-23T10:00:00Z") };
+    render(<FollowUpRow item={overdueItem} onDone={vi.fn()} overdue />);
+    expect(screen.getByText("23 Oct, 3:30 pm")).toBeInTheDocument();
+  });
 });

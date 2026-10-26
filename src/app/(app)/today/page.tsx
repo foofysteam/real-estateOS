@@ -63,7 +63,7 @@ export default async function TodayPage() {
             <section aria-labelledby="today-overdue" className="flex flex-col gap-2">
               <SectionHeading id="today-overdue" title="Overdue" count={overdue.length} />
               <Card className="p-0">
-                <FollowUpList items={overdue} />
+                <FollowUpList items={overdue} overdue />
               </Card>
             </section>
           )}

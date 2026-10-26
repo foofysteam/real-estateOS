@@ -3,7 +3,7 @@
 import { Check, MessageCircle, Phone } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { StageBadge } from "@/components/leads/stage-badge";
-import { formatIstTime } from "@/lib/dates";
+import { formatIstDateTime, formatIstTime } from "@/lib/dates";
 import { toTelLink, toWaLink } from "@/lib/phone";
 import type { FollowUpWithLead } from "@/lib/leads/queries";
 
@@ -11,10 +11,13 @@ export function FollowUpRow({
   item,
   onDone,
   pending = false,
+  overdue = false,
 }: {
   item: FollowUpWithLead;
   onDone: (id: string) => void;
   pending?: boolean;
+  /** Overdue items may be days old, so show the date as well as the time. */
+  overdue?: boolean;
 }) {
   const { lead } = item;
   return (
@@ -26,7 +29,7 @@ export function FollowUpRow({
         </div>
         <div className="flex min-w-0 items-center gap-2 text-sm text-fg-muted lg:w-64 lg:shrink-0">
           <time dateTime={item.dueAt.toISOString()} className="shrink-0 tabular-nums">
-            {formatIstTime(item.dueAt)}
+            {overdue ? formatIstDateTime(item.dueAt) : formatIstTime(item.dueAt)}
           </time>
           {lead.project && (
             <>
