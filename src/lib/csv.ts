@@ -125,7 +125,7 @@ export function parseLeadsCsv(text: string, source: LeadSource): { rows: Normali
   return { rows: rows.map((r) => r.lead), errors };
 }
 
-/** Parse and ingest a leads CSV row by row; invalid phones are reported against their line. */
+/** Parse and ingest a leads CSV row by row; any per-row failure is reported against its line and the import continues. */
 export async function importLeadsCsv(text: string, source: LeadSource, actorId?: string): Promise<CsvImportResult> {
   const { rows, errors } = parseRows(text, source);
   let created = 0;
@@ -136,8 +136,11 @@ export async function importLeadsCsv(text: string, source: LeadSource, actorId?:
       if (result.deduplicated) deduplicated++;
       else created++;
     } catch (err) {
-      if (!(err instanceof InvalidPhoneError)) throw err;
-      errors.push({ line, message: "Invalid phone number" });
+      const message =
+        err instanceof InvalidPhoneError
+          ? "Invalid phone number"
+          : "Import failed: " + (err instanceof Error ? err.message : "unknown error");
+      errors.push({ line, message });
     }
   }
   errors.sort((a, b) => a.line - b.line);
