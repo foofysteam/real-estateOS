@@ -98,8 +98,15 @@ describe("lead detail actions", () => {
 
   it("completeFollowUpAction refuses another agent's follow-up", async () => {
     const fu = await db.followUp.create({ data: { leadId, ownerId: other.id, dueAt: new Date(), channel: "CALL" } });
-    expect(await actions.completeFollowUpAction(fu.id)).toMatchObject({ ok: false });
+    expect(await actions.completeFollowUpAction(fu.id)).toEqual({ ok: false, error: expect.stringMatching(/permission/i) });
     currentUser.value = { id: other.id, email: other.email, name: other.name, role: "AGENT" };
     expect(await actions.completeFollowUpAction(fu.id)).toEqual({ ok: true });
+  });
+
+  it("completeFollowUpAction lets an ADMIN complete another agent's follow-up", async () => {
+    const fu = await db.followUp.create({ data: { leadId, ownerId: other.id, dueAt: new Date(), channel: "CALL" } });
+    currentUser.value = { id: agent.id, email: agent.email, name: agent.name, role: "ADMIN" };
+    expect(await actions.completeFollowUpAction(fu.id)).toEqual({ ok: true });
+    expect((await db.followUp.findUniqueOrThrow({ where: { id: fu.id } })).completedAt).not.toBeNull();
   });
 });

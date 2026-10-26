@@ -1,5 +1,6 @@
 import { db } from "@/lib/db";
-import type { FollowUp, FollowUpChannel, Lead, LeadEvent, LeadStage, Prisma } from "@/generated/prisma/client";
+import type { FollowUp, FollowUpChannel, Lead, LeadEvent, LeadStage, Prisma, Role } from "@/generated/prisma/client";
+import { ForbiddenError } from "@/lib/auth/current-user";
 import { computeScore } from "@/lib/score";
 import { canTransition, isTerminal } from "@/lib/stages";
 
@@ -146,6 +147,16 @@ export function scheduleFollowUp(
     await recomputeNextFollowUp(tx, leadId);
     return followUp;
   });
+}
+
+/** Unowned follow-ups (duplicate-inbound leads) are anyone's; owned ones belong to their owner or an ADMIN. */
+export function assertCanCompleteFollowUp(
+  followUp: { ownerId: string | null },
+  user: { id: string; role: Role },
+): void {
+  if (followUp.ownerId !== null && followUp.ownerId !== user.id && user.role !== "ADMIN") {
+    throw new ForbiddenError();
+  }
 }
 
 export function completeFollowUp(followUpId: string, actorId: string): Promise<FollowUp> {

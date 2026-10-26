@@ -8,6 +8,7 @@ import { ForbiddenError, requireUser } from "@/lib/auth/current-user";
 import { parseRupees } from "@/lib/money";
 import {
   addNote,
+  assertCanCompleteFollowUp,
   assignLead,
   changeStage,
   completeFollowUp,
@@ -24,13 +25,14 @@ export type ActionResult = { ok: true } | { ok: false; error: string };
 
 class ActionError extends Error {}
 
-const DOMAIN_ERRORS = [InvalidTransitionError, LostReasonRequiredError, LeadNotFoundError, ForbiddenError, ActionError];
+const DOMAIN_ERRORS = [InvalidTransitionError, LostReasonRequiredError, LeadNotFoundError, ActionError];
 
 /** Validation and domain failures become readable results; anything unexpected still throws. */
 async function run(work: () => Promise<unknown>): Promise<ActionResult> {
   try {
     await work();
   } catch (err) {
+    if (err instanceof ForbiddenError) return { ok: false, error: "You don't have permission to do that" };
     if (err instanceof z.ZodError) return { ok: false, error: err.issues[0]?.message ?? "Invalid input" };
     if (DOMAIN_ERRORS.some((E) => err instanceof E)) return { ok: false, error: (err as Error).message };
     throw err;
@@ -168,10 +170,7 @@ export async function completeFollowUpAction(followUpId: string): Promise<Action
   return run(async () => {
     const followUp = await db.followUp.findUnique({ where: { id: id.parse(followUpId) }, select: { ownerId: true } });
     if (!followUp) throw new ActionError("Follow-up not found");
-    // Same rule as Today: unowned follow-ups are anyone's; owned ones belong to their owner or an ADMIN.
-    if (followUp.ownerId !== null && followUp.ownerId !== user.id && user.role !== "ADMIN") {
-      throw new ActionError("Only the follow-up's owner or an admin can complete it");
-    }
+    assertCanCompleteFollowUp(followUp, user);
     await completeFollowUp(followUpId, user.id);
   });
 }
