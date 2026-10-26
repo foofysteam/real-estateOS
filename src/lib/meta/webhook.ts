@@ -43,6 +43,9 @@ export function extractLeadgenIds(body: unknown): LeadgenChange[] {
 }
 
 async function processLeadgen(eventId: string, leadgenId: string, fetchImpl?: typeof fetch): Promise<void> {
+  // Claim atomically so a redelivery scheduled before this run finishes cannot process the lead twice.
+  const claimed = await db.webhookEvent.updateMany({ where: { id: eventId, status: "RECEIVED" }, data: { status: "PROCESSING" } });
+  if (claimed.count === 0) return;
   try {
     const token = await getMetaAccessToken();
     if (!token) throw new Error("No Meta access token configured");
@@ -82,7 +85,7 @@ export async function handleMetaWebhook(
       create: { provider: PROVIDER, externalId: change.leadgenId, raw: change },
       update: {},
     });
-    if (event.status === "RECEIVED" && event.processedAt === null) {
+    if (event.status === "RECEIVED") {
       deps.schedule(() => processLeadgen(event.id, change.leadgenId, deps.fetchImpl));
     }
   }

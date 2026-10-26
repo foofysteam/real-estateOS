@@ -107,6 +107,19 @@ describe("handleMetaWebhook", () => {
     expect(fetchImpl).toHaveBeenCalledTimes(1);
   });
 
+  it("processes once when a redelivery arrives before the first run finishes", async () => {
+    const body = payload();
+    const first = await deliver(body);
+    const second = await deliver(body);
+    for (const fn of [...first.scheduled, ...second.scheduled]) await fn();
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+    expect(await db.lead.count()).toBe(1);
+    expect(await db.webhookEvent.count()).toBe(1);
+    expect((await db.webhookEvent.findFirstOrThrow()).status).toBe("PROCESSED");
+    expect(await db.leadEvent.count({ where: { type: "DUPLICATE_INBOUND" } })).toBe(0);
+    expect(await db.followUp.count()).toBe(0);
+  });
+
   it("marks FAILED with error text when Graph API fails", async () => {
     fetchImpl.mockResolvedValueOnce(new Response("{}", { status: 500 }));
     const { scheduled } = await deliver(payload());

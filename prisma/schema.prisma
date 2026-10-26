@@ -57,6 +57,7 @@ enum FollowUpChannel {
 
 enum WebhookStatus {
   RECEIVED
+  PROCESSING
   PROCESSED
   FAILED
 }
