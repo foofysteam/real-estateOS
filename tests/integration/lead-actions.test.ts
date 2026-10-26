@@ -66,6 +66,15 @@ describe("lead detail actions", () => {
     expect(owners.map((f) => f.ownerId)).toEqual([agent.id, other.id]);
   });
 
+  it("scheduleFollowUpAction refuses a closed lead", async () => {
+    const dueAt = new Date(Date.now() + 3_600_000).toISOString();
+    for (const stage of ["BOOKED", "LOST"] as const) {
+      await db.lead.update({ where: { id: leadId }, data: { stage } });
+      expect(await actions.scheduleFollowUpAction(leadId, { dueAt, channel: "CALL" })).toEqual({ ok: false, error: "Lead is closed" });
+    }
+    expect(await db.followUp.count()).toBe(0);
+  });
+
   it("scheduleFollowUpAction rejects a past due time", async () => {
     const r = await actions.scheduleFollowUpAction(leadId, { dueAt: new Date(Date.now() - 60_000).toISOString(), channel: "CALL" });
     expect(r).toEqual({ ok: false, error: expect.stringMatching(/future/i) });

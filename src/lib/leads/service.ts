@@ -79,8 +79,10 @@ export function changeStage(
 export function assignLead(leadId: string, ownerId: string | null, actorId: string): Promise<Lead> {
   return db.$transaction(async (tx) => {
     const lead = await findLead(tx, leadId);
+    // Open follow-ups follow the lead to its new owner (or become unowned) so nothing is left on the old owner's Today.
+    const moved = await tx.followUp.updateMany({ where: { leadId, completedAt: null }, data: { ownerId } });
     await tx.leadEvent.create({
-      data: { leadId, actorId, type: "ASSIGNED", payload: { from: lead.ownerId, to: ownerId } },
+      data: { leadId, actorId, type: "ASSIGNED", payload: { from: lead.ownerId, to: ownerId, followUpsMoved: moved.count } },
     });
     return tx.lead.update({ where: { id: leadId }, data: { ownerId } });
   });
@@ -141,7 +143,8 @@ export function scheduleFollowUp(
   actorId: string,
 ): Promise<FollowUp> {
   return db.$transaction(async (tx) => {
-    await findLead(tx, leadId);
+    const lead = await findLead(tx, leadId);
+    if (isTerminal(lead.stage)) throw new LeadClosedError();
     const followUp = await tx.followUp.create({ data: { leadId, ...input } });
     await tx.leadEvent.create({
       data: {

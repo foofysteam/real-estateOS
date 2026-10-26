@@ -8,6 +8,7 @@ import {
   changeStage,
   completeFollowUp,
   InvalidTransitionError,
+  LeadClosedError,
   LeadNotFoundError,
   logContact,
   LostReasonRequiredError,
@@ -75,8 +76,8 @@ describe("lead service", () => {
     const assignedEvents = events.filter((e) => e.type === "ASSIGNED");
     expect(assignedEvents).toHaveLength(2);
     expect(assignedEvents.map((e) => e.payload)).toEqual([
-      { from: null, to: agent.id },
-      { from: agent.id, to: null },
+      { from: null, to: agent.id, followUpsMoved: 0 },
+      { from: agent.id, to: null, followUpsMoved: 0 },
     ]);
   });
 
@@ -135,6 +136,35 @@ describe("lead service", () => {
     await changeStage(leadId, "QUALIFIED", actor.id);
     const again = await logContact(leadId, "WHATSAPP", undefined, actor.id);
     expect(again.stage).toBe("QUALIFIED");
+  });
+
+  it("moves open follow-ups to the new owner on reassign, and unowns them on unassign", async () => {
+    const b = await db.user.create({ data: { email: "b@x.in", name: "B", role: "AGENT", passwordHash: "x" } });
+    await assignLead(leadId, agent.id, actor.id);
+    const soon = new Date(Date.now() + DAY);
+    await scheduleFollowUp(leadId, { dueAt: soon, channel: "CALL", ownerId: agent.id }, actor.id);
+    await scheduleFollowUp(leadId, { dueAt: soon, channel: "VISIT", ownerId: agent.id }, actor.id);
+    const done = await scheduleFollowUp(leadId, { dueAt: soon, channel: "CALL", ownerId: agent.id }, actor.id);
+    await completeFollowUp(done.id, actor.id);
+
+    await assignLead(leadId, b.id, actor.id);
+    const open = await db.followUp.findMany({ where: { leadId, completedAt: null } });
+    expect(open.map((f) => f.ownerId)).toEqual([b.id, b.id]);
+    expect((await db.followUp.findUniqueOrThrow({ where: { id: done.id } })).ownerId).toBe(agent.id);
+    expect((await lastEvent(leadId)).payload).toEqual({ from: agent.id, to: b.id, followUpsMoved: 2 });
+
+    await assignLead(leadId, null, actor.id);
+    const unowned = await db.followUp.findMany({ where: { leadId, completedAt: null } });
+    expect(unowned.map((f) => f.ownerId)).toEqual([null, null]);
+  });
+
+  it("refuses to schedule a follow-up on a BOOKED or LOST lead", async () => {
+    const dueAt = new Date(Date.now() + DAY);
+    await changeStage(leadId, "LOST", actor.id, { lostReason: "Budget" });
+    await expect(scheduleFollowUp(leadId, { dueAt, channel: "CALL", ownerId: agent.id }, actor.id)).rejects.toBeInstanceOf(
+      LeadClosedError,
+    );
+    expect(await db.followUp.count({ where: { leadId } })).toBe(0);
   });
 
   it("scheduleFollowUp sets nextFollowUpAt to earliest open; completeFollowUp advances it", async () => {
