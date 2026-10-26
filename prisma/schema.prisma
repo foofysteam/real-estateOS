@@ -62,15 +62,15 @@ enum WebhookStatus {
 }
 
 model Project {
-  id            String   @id @default(cuid())
-  name          String
-  slug          String   @unique
-  city          String
-  priceMinPaise Int
-  priceMaxPaise Int
-  isActive      Boolean  @default(true)
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  id             String   @id @default(cuid())
+  name           String
+  slug           String   @unique
+  city           String
+  priceMinRupees Int
+  priceMaxRupees Int
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
   leads Lead[]
 }
@@ -101,7 +101,7 @@ model Lead {
   source          LeadSource
   stage           LeadStage  @default(NEW)
   score           Int        @default(0)
-  budgetPaise     Int?
+  budgetRupees    Int?
   configuration   String?
   locality        String?
   notes           String?
