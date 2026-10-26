@@ -21,8 +21,11 @@ const COLUMNS: Record<string, keyof NormalizedLead | "budget"> = {
 };
 const REQUIRED = ["name", "phone"];
 
-/** RFC 4180-style records: quoted fields may hold commas, quotes ("") and newlines. Line numbers are 1-based. */
-function readRecords(text: string): CsvRecord[] {
+/**
+ * RFC 4180-style records: quoted fields may hold commas, quotes ("") and newlines. Line numbers are 1-based.
+ * A quote still open at end of file swallows the rest of the file, so that partial record is dropped and reported.
+ */
+function readRecords(text: string): { records: CsvRecord[]; error?: CsvError } {
   const records: CsvRecord[] = [];
   let fields: string[] = [];
   let field = "";
@@ -64,15 +67,19 @@ function readRecords(text: string): CsvRecord[] {
       field += ch;
     }
   }
+  if (inQuotes) {
+    return { records, error: { line: recordLine, message: "Unclosed quote; rows from this line were not imported" } };
+  }
   if (field !== "" || fields.length > 0) endRecord();
-  return records;
+  return { records };
 }
 
 type ParsedRow = { line: number; lead: NormalizedLead };
 
 function parseRows(text: string, source: LeadSource): { rows: ParsedRow[]; errors: CsvError[] } {
-  const [header, ...data] = readRecords(text);
-  if (!header) return { rows: [], errors: [{ line: 1, message: "CSV is empty" }] };
+  const { records, error: readError } = readRecords(text);
+  const [header, ...data] = records;
+  if (!header) return { rows: [], errors: [readError ?? { line: 1, message: "CSV is empty" }] };
 
   const keys = header.fields.map((h) => COLUMNS[h.trim().toLowerCase()]);
   const missing = REQUIRED.filter((r) => !keys.includes(COLUMNS[r]));
@@ -81,7 +88,7 @@ function parseRows(text: string, source: LeadSource): { rows: ParsedRow[]; error
   }
 
   const rows: ParsedRow[] = [];
-  const errors: CsvError[] = [];
+  const errors: CsvError[] = readError ? [readError] : [];
   const receivedAt = new Date();
   for (const { line, fields } of data) {
     const raw: Record<string, string> = {};
@@ -126,7 +133,7 @@ function parseRows(text: string, source: LeadSource): { rows: ParsedRow[]; error
 /** Parse a leads CSV (header row is line 1) into validated leads plus per-line errors. */
 export function parseLeadsCsv(text: string, source: LeadSource): { rows: NormalizedLead[]; errors: CsvError[] } {
   const { rows, errors } = parseRows(text, source);
-  return { rows: rows.map((r) => r.lead), errors };
+  return { rows: rows.map((r) => r.lead), errors: errors.sort((a, b) => a.line - b.line) };
 }
 
 /** Parse and ingest a leads CSV row by row; any per-row failure is reported against its line and the import continues. */

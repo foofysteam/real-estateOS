@@ -62,4 +62,18 @@ describe("parseLeadsCsv", () => {
     expect(r.errors).toEqual([{ line: 2, message: "Budget too large" }]);
     expect(r.rows.map((x) => x.name)).toEqual(["Priya"]);
   });
+
+  it("reports an unclosed quote and imports only the rows before it", () => {
+    const text = 'name,phone\nAsha,9845000001\nBad,"9845000002\nCara,9845000003\nDev,9845000004\n';
+    const r = parseLeadsCsv(text, "CSV_IMPORT");
+    expect(r.rows.map((x) => x.name)).toEqual(["Asha"]);
+    expect(r.rows).toHaveLength(1);
+    expect(r.errors).toEqual([{ line: 3, message: "Unclosed quote; rows from this line were not imported" }]);
+  });
+
+  it("reports an unclosed quote in the header", () => {
+    const r = parseLeadsCsv('name,"phone\nAsha,9845000001', "CSV_IMPORT");
+    expect(r.rows).toEqual([]);
+    expect(r.errors).toEqual([{ line: 1, message: expect.stringMatching(/unclosed quote/i) }]);
+  });
 });
