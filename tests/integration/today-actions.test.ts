@@ -1,7 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { db } from "@/lib/db";
 import type { User } from "@/generated/prisma/client";
-import { ForbiddenError } from "@/lib/auth/current-user";
 import { resetDb } from "../helpers/db";
 
 const currentUser = vi.hoisted(() => ({ value: null as null | { id: string; email: string; name: string; role: "AGENT" | "ADMIN" } }));
@@ -39,23 +38,23 @@ describe("completeFollowUpAction", () => {
 
   it("completes the agent's own follow-up", async () => {
     const fu = await followUp(agent.id);
-    await completeFollowUpAction(fu.id);
+    expect(await completeFollowUpAction(fu.id)).toEqual({ ok: true });
     expect(await completedAt(fu.id)).not.toBeNull();
   });
 
-  it("rejects another agent's follow-up with ForbiddenError and leaves it open", async () => {
+  it("refuses another agent's follow-up with a readable error and leaves it open", async () => {
     const fu = await followUp(otherAgent.id);
-    await expect(completeFollowUpAction(fu.id)).rejects.toBeInstanceOf(ForbiddenError);
+    expect(await completeFollowUpAction(fu.id)).toEqual({ ok: false, error: "You don't have permission to do that" });
     expect(await completedAt(fu.id)).toBeNull();
   });
 
   it("completes an unowned follow-up", async () => {
     const fu = await followUp(null);
-    await completeFollowUpAction(fu.id);
+    expect(await completeFollowUpAction(fu.id)).toEqual({ ok: true });
     expect(await completedAt(fu.id)).not.toBeNull();
   });
 
-  it("throws for a missing follow-up", async () => {
-    await expect(completeFollowUpAction("missing")).rejects.toThrow("Follow-up not found");
+  it("returns a readable error for a missing follow-up", async () => {
+    expect(await completeFollowUpAction("missing")).toEqual({ ok: false, error: "Follow-up not found" });
   });
 });

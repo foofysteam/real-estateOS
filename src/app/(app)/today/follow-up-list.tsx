@@ -1,24 +1,20 @@
 "use client";
 
-import { useTransition, useState } from "react";
+import { useState } from "react";
+import { FormError } from "@/components/ui/field";
 import type { FollowUpWithLead } from "@/lib/leads/queries";
+import { useAction } from "@/lib/use-action";
 import { completeFollowUpAction } from "./actions";
 import { FollowUpRow } from "./follow-up-row";
 
-/** Wires each row's Done button to the server action; the page revalidates and drops the row. */
+/** Wires each row's Done button to the server action; the page revalidates and drops the row. A failure shows inline. */
 export function FollowUpList({ items, overdue = false }: { items: FollowUpWithLead[]; overdue?: boolean }) {
-  const [isPending, startTransition] = useTransition();
-  const [pendingId, setPendingId] = useState<string | null>(null);
+  const { pending, error, run } = useAction();
+  const [activeId, setActiveId] = useState<string | null>(null);
 
   function handleDone(id: string) {
-    setPendingId(id);
-    startTransition(async () => {
-      try {
-        await completeFollowUpAction(id);
-      } finally {
-        setPendingId(null);
-      }
-    });
+    setActiveId(id);
+    void run(() => completeFollowUpAction(id));
   }
 
   return (
@@ -28,7 +24,8 @@ export function FollowUpList({ items, overdue = false }: { items: FollowUpWithLe
           key={item.id}
           item={item}
           onDone={handleDone}
-          pending={isPending && pendingId === item.id}
+          pending={pending && activeId === item.id}
+          error={!pending && activeId === item.id ? error : null}
           overdue={overdue}
         />
       ))}

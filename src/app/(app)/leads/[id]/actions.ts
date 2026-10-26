@@ -1,48 +1,24 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { FollowUpChannel, LeadStage } from "@/generated/prisma/enums";
-import { ForbiddenError, requireUser } from "@/lib/auth/current-user";
+import { requireUser } from "@/lib/auth/current-user";
 import { MAX_RUPEES, parseRupees } from "@/lib/money";
 import type { ActionResult } from "@/lib/use-action";
+import { LeadActionError as ActionError, runLeadAction as run } from "@/lib/leads/run-action";
 import {
   addNote,
   assertCanCompleteFollowUp,
   assignLead,
   changeStage,
   completeFollowUp,
-  InvalidTransitionError,
   LeadNotFoundError,
   logContact,
-  LostReasonRequiredError,
   scheduleFollowUp,
   updateLeadFields,
   type LeadFieldPatch,
 } from "@/lib/leads/service";
-
-
-class ActionError extends Error {}
-
-const DOMAIN_ERRORS = [InvalidTransitionError, LostReasonRequiredError, LeadNotFoundError, ActionError];
-
-/** Validation and domain failures become readable results; anything unexpected still throws. */
-async function run(work: () => Promise<unknown>): Promise<ActionResult> {
-  try {
-    await work();
-  } catch (err) {
-    if (err instanceof ForbiddenError) return { ok: false, error: "You don't have permission to do that" };
-    if (err instanceof z.ZodError) return { ok: false, error: err.issues[0]?.message ?? "Invalid input" };
-    if (DOMAIN_ERRORS.some((E) => err instanceof E)) return { ok: false, error: (err as Error).message };
-    throw err;
-  }
-  revalidatePath("/leads/[id]", "page");
-  revalidatePath("/leads");
-  revalidatePath("/pipeline");
-  revalidatePath("/today");
-  return { ok: true };
-}
 
 const id = z.string().min(1).max(64);
 const noteText = z.string().trim().min(1, "Write something first").max(2000, "Keep it under 2000 characters");

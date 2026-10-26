@@ -27,6 +27,13 @@ export class LeadNotFoundError extends Error {
   }
 }
 
+export class LeadClosedError extends Error {
+  constructor() {
+    super("Lead is closed");
+    this.name = "LeadClosedError";
+  }
+}
+
 async function findLead(tx: Tx, leadId: string): Promise<Lead> {
   const lead = await tx.lead.findUnique({ where: { id: leadId } });
   if (!lead) throw new LeadNotFoundError(leadId);
