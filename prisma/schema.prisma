@@ -1,0 +1,186 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  ADMIN
+  AGENT
+}
+
+enum LeadSource {
+  META_LEAD_AD
+  WEBSITE
+  GOOGLE_ADS
+  PORTAL_99ACRES
+  PORTAL_MAGICBRICKS
+  PORTAL_HOUSING
+  WALK_IN
+  REFERRAL
+  CSV_IMPORT
+}
+
+enum LeadStage {
+  NEW
+  CONTACTED
+  QUALIFIED
+  SITE_VISIT_SCHEDULED
+  SITE_VISIT_DONE
+  NEGOTIATION
+  BOOKED
+  LOST
+}
+
+enum LeadEventType {
+  CREATED
+  DUPLICATE_INBOUND
+  STAGE_CHANGED
+  ASSIGNED
+  NOTE_ADDED
+  FOLLOW_UP_SCHEDULED
+  FOLLOW_UP_COMPLETED
+  CONTACT_LOGGED
+  SCORE_CHANGED
+  FIELD_UPDATED
+}
+
+enum FollowUpChannel {
+  CALL
+  WHATSAPP
+  VISIT
+  EMAIL
+}
+
+enum WebhookStatus {
+  RECEIVED
+  PROCESSED
+  FAILED
+}
+
+model Project {
+  id            String   @id @default(cuid())
+  name          String
+  slug          String   @unique
+  city          String
+  priceMinPaise Int
+  priceMaxPaise Int
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  leads Lead[]
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  name         String
+  passwordHash String
+  role         Role
+  phone        String?
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  leads     Lead[]
+  events    LeadEvent[]
+  followUps FollowUp[]
+}
+
+model Lead {
+  id              String     @id @default(cuid())
+  projectId       String?
+  ownerId         String?
+  name            String
+  phone           String     @unique
+  email           String?
+  source          LeadSource
+  stage           LeadStage  @default(NEW)
+  score           Int        @default(0)
+  budgetPaise     Int?
+  configuration   String?
+  locality        String?
+  notes           String?
+  lastContactedAt DateTime?
+  nextFollowUpAt  DateTime?
+  lostReason      String?
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+
+  project   Project?    @relation(fields: [projectId], references: [id])
+  owner     User?       @relation(fields: [ownerId], references: [id])
+  events    LeadEvent[]
+  followUps FollowUp[]
+
+  @@index([stage])
+  @@index([ownerId])
+  @@index([nextFollowUpAt])
+  @@index([createdAt])
+}
+
+model LeadEvent {
+  id        String        @id @default(cuid())
+  leadId    String
+  actorId   String?
+  type      LeadEventType
+  payload   Json
+  createdAt DateTime      @default(now())
+
+  lead  Lead  @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  actor User? @relation(fields: [actorId], references: [id])
+
+  @@index([leadId, createdAt])
+}
+
+model FollowUp {
+  id          String          @id @default(cuid())
+  leadId      String
+  ownerId     String?
+  dueAt       DateTime
+  channel     FollowUpChannel
+  note        String?
+  completedAt DateTime?
+  createdAt   DateTime        @default(now())
+
+  lead  Lead  @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  owner User? @relation(fields: [ownerId], references: [id])
+
+  @@index([ownerId, dueAt])
+}
+
+model IngestKey {
+  id         String     @id @default(cuid())
+  name       String
+  source     LeadSource
+  keyHash    String     @unique
+  lastUsedAt DateTime?
+  isActive   Boolean    @default(true)
+  createdAt  DateTime   @default(now())
+}
+
+model WebhookEvent {
+  id          String        @id @default(cuid())
+  provider    String
+  externalId  String
+  receivedAt  DateTime      @default(now())
+  processedAt DateTime?
+  status      WebhookStatus @default(RECEIVED)
+  error       String?
+  raw         Json
+
+  @@unique([provider, externalId])
+}
+
+model MetaConnection {
+  id             Int      @id @default(1)
+  pageId         String
+  adAccountId    String
+  accessTokenEnc String
+  leadFormIds    String[]
+  mcpUrl         String?
+  updatedAt      DateTime @updatedAt
+}
