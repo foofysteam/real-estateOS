@@ -60,7 +60,9 @@ Sales OS is a mobile-first CRM for a real-estate sales team selling Bengaluru pr
 | Admin | `admin@sc.studio`                        | `admin1234` |
 | Agent | `agent1@sc.studio` … `agent3@sc.studio`  | `agent1234` |
 
-Change these before exposing the app anywhere (Settings → Team).
+Change these before exposing the app anywhere: each user can change their own password from the user menu (top right → **Change password**), and an admin can reset anyone's from Settings → Team.
+
+When an admin invites a teammate (Settings → Team), the app shows a temporary password once. The invited user should sign in with it and change it straight away from the user menu.
 
 ## Screens
 
