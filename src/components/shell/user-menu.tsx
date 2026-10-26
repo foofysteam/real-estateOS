@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import { LogOut } from "lucide-react";
@@ -12,11 +13,25 @@ function initials(name: string): string {
 
 export function UserMenu({ name, email, role }: { name: string; email: string; role: Role }) {
   const router = useRouter();
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState(false);
 
-  async function logout() {
-    await fetch("/api/auth/logout", { method: "POST" }).catch(() => undefined);
-    router.push("/login");
-    router.refresh();
+  // Only leave once the server has cleared the session; otherwise say so and stay.
+  async function logout(event: Event) {
+    event.preventDefault(); // keep the menu open for pending/error feedback
+    setPending(true);
+    setError(false);
+    const ok = await fetch("/api/auth/logout", { method: "POST" }).then(
+      (res) => res.ok,
+      () => false,
+    );
+    if (ok) {
+      router.push("/login");
+      router.refresh();
+      return;
+    }
+    setPending(false);
+    setError(true);
   }
 
   return (
@@ -44,11 +59,17 @@ export function UserMenu({ name, email, role }: { name: string; email: string; r
           <DropdownMenu.Separator className="my-1 h-px bg-border" />
           <DropdownMenu.Item
             onSelect={logout}
-            className="flex min-h-11 cursor-default items-center gap-2 rounded-sm px-2 text-sm outline-none select-none data-[highlighted]:bg-surface-2 md:min-h-9"
+            disabled={pending}
+            className="flex min-h-11 cursor-default items-center gap-2 rounded-sm px-2 text-sm outline-none select-none data-[disabled]:opacity-50 data-[highlighted]:bg-surface-2 md:min-h-9"
           >
             <LogOut className="size-4 text-fg-muted" aria-hidden="true" />
             Log out
           </DropdownMenu.Item>
+          {error && (
+            <p role="alert" className="px-2 pt-1 pb-2 text-xs text-danger">
+              Couldn&apos;t sign out. Try again.
+            </p>
+          )}
         </DropdownMenu.Content>
       </DropdownMenu.Portal>
     </DropdownMenu.Root>

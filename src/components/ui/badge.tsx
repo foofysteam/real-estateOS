@@ -4,11 +4,11 @@ import { cn } from "@/lib/cn";
 export type BadgeTone = "neutral" | "accent" | "success" | "warning" | "danger";
 
 const TONES: Record<BadgeTone, string> = {
-  neutral: "bg-surface-2 text-fg-muted",
+  neutral: "bg-surface-2 text-fg",
   accent: "bg-[color-mix(in_oklab,var(--accent)_14%,transparent)] text-accent",
-  success: "bg-[color-mix(in_oklab,var(--success)_14%,transparent)] text-success",
-  warning: "bg-[color-mix(in_oklab,var(--warning)_16%,transparent)] text-warning",
-  danger: "bg-[color-mix(in_oklab,var(--danger)_14%,transparent)] text-danger",
+  success: "bg-tone-success-bg text-tone-success-fg",
+  warning: "bg-tone-warning-bg text-tone-warning-fg",
+  danger: "bg-tone-danger-bg text-tone-danger-fg",
 };
 
 export function Badge({ tone = "neutral", className, ...props }: ComponentProps<"span"> & { tone?: BadgeTone }) {
