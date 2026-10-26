@@ -152,6 +152,14 @@ The Ads screen and the lead-form sync talk to Meta through its Ads MCP server by
 
   The defaults (`ads_get_campaigns`, `ads_get_insights`, `ads_get_lead_forms`) have **not been verified against Meta's live MCP server**. If one is wrong, the Ads screen shows a "Meta MCP tool unavailable" panel that lists the tool names the server actually offers; copy the right names from it into `META_MCP_TOOL_MAP` and restart.
 
+## Deploy
+
+- **Environment at build time.** Set every variable from `.env.example` (at least `DATABASE_URL`, `SESSION_SECRET`, `ENCRYPTION_KEY`) before `pnpm build`, not only at runtime; the build reads and validates the environment.
+- **Migrate, then start.** Run `pnpm db:deploy` against the production database before each `pnpm start`, so the schema matches the code.
+- **HTTPS only.** `APP_URL` must be the public `https://` address. The session cookie is `Secure` in production, so the browser only sends it over https: opening a production build over plain http (for example from a phone on the LAN at `http://192.168.x.x:3000`) signs you in and then bounces straight back to `/login`. Use `pnpm dev` or an https tunnel for phone testing.
+- **Long-lived server for webhooks.** The Meta webhook answers immediately and fetches the lead afterwards with `after()`. Run on a long-lived Node server, or on a platform that keeps the function alive with `waitUntil`; otherwise the background fetch can be cut off and the delivery shows as stuck under Settings → Integrations → Webhook events.
+- **One database pool per instance.** Each server instance opens its own Prisma `pg` pool, so size the database's connection limit for (instances × pool size), or put a pooler such as PgBouncer in front.
+
 ## Changing the database schema
 
 Migrations are written by hand and applied with `migrate deploy`; do not use `prisma migrate dev`, `migrate reset` or `db push`.
