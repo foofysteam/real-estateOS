@@ -11,7 +11,8 @@ import { CsvImport } from "./import/csv-import";
 import { IngestKeys } from "./integrations/ingest-keys";
 import { MetaForm } from "./integrations/meta-form";
 import { ProjectList } from "./projects/project-list";
-import { parseSettingsTab, SettingsTabs, type SettingsTab } from "./settings-tabs";
+import { parseSettingsTab, type SettingsTab } from "./settings-tab";
+import { SettingsTabs } from "./settings-tabs";
 import { TeamList } from "./team/team-list";
 
 export const metadata: Metadata = { title: "Settings · Sales OS" };

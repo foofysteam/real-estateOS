@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
-import { parseSettingsTab, SettingsTabs } from "@/app/(app)/settings/settings-tabs";
+import { parseSettingsTab } from "@/app/(app)/settings/settings-tab";
+import { SettingsTabs } from "@/app/(app)/settings/settings-tabs";
 
 afterEach(cleanup);
 
