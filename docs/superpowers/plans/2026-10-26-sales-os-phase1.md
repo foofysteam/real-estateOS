@@ -386,7 +386,7 @@ it("deduplicates on phone and appends DUPLICATE_INBOUND", async () => {
   expect((await db.lead.findUniqueOrThrow({ where: { id: a.leadId } })).nextFollowUpAt).not.toBeNull();
 });
 it("does not set nextFollowUpAt on a duplicate for a LOST lead", async () => { /* create, changeStage LOST, re-ingest */ expect(lead.nextFollowUpAt).toBeNull(); });
-it("resolves projectSlug and scores budget in range", async () => { /* create project 80L-1.6Cr; ingest with projectSlug and budgetRupees 1e9 */ expect(lead.projectId).toBe(project.id); expect(lead.score).toBe(65); });
+it("resolves projectSlug and scores budget in range", async () => { /* create project 80L-1.6Cr; ingest with projectSlug and budgetRupees 10000000 */ expect(lead.projectId).toBe(project.id); expect(lead.score).toBe(65); });
 it("throws InvalidPhoneError for junk phone", async () => { await expect(ingestLead({ ...base, phone: "12" })).rejects.toBeInstanceOf(InvalidPhoneError); expect(await db.lead.count()).toBe(0); });
 ```
 
