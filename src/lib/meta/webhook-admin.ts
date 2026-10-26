@@ -14,7 +14,7 @@ export type FailedWebhookEvent = {
   receivedAt: Date;
 };
 
-function retryableWhere(now = Date.now()) {
+function failedOrStuckWhere(now = Date.now()) {
   return {
     provider: "meta",
     OR: [
@@ -27,7 +27,7 @@ function retryableWhere(now = Date.now()) {
 /** FAILED deliveries plus PROCESSING ones stuck for over 15 minutes, newest first. */
 export function listFailedWebhookEvents(limit = 50): Promise<FailedWebhookEvent[]> {
   return db.webhookEvent.findMany({
-    where: retryableWhere(),
+    where: failedOrStuckWhere(),
     orderBy: { receivedAt: "desc" },
     take: limit,
     select: { id: true, externalId: true, status: true, error: true, receivedAt: true },
@@ -41,28 +41,54 @@ export class WebhookEventNotFoundError extends Error {
   }
 }
 
+export class WebhookEventNotRetryableError extends Error {
+  constructor() {
+    super("Only failed deliveries can be retried");
+    this.name = "WebhookEventNotRetryableError";
+  }
+}
+
 /**
- * Put a failed (or stale) delivery back to RECEIVED and run it through the same processing as the webhook.
- * Returns the row's final status; a row that is no longer retryable is left alone.
+ * Put a FAILED delivery back to RECEIVED and run it through the same processing as the webhook; returns the row's
+ * final status. Only FAILED rows are reset: a PROCESSING row (stale or not) may still be mid-run, and staleness is
+ * measured from receivedAt, so resetting it could process the lead twice.
  */
 export async function retryWebhookEvent(id: string, fetchImpl?: typeof fetch): Promise<WebhookStatus> {
-  await db.webhookEvent.updateMany({ where: { id, ...retryableWhere() }, data: { status: "RECEIVED", error: null } });
+  const reset = await db.webhookEvent.updateMany({ where: { id, status: "FAILED" }, data: { status: "RECEIVED", error: null } });
+  if (reset.count === 0) {
+    const exists = await db.webhookEvent.findUnique({ where: { id }, select: { id: true } });
+    throw exists ? new WebhookEventNotRetryableError() : new WebhookEventNotFoundError();
+  }
   const status = await processLeadgen(id, fetchImpl);
   if (status === null) throw new WebhookEventNotFoundError();
   return status;
 }
 
-/** Retry up to MAX_RETRY_BATCH retryable deliveries one after another. */
+/** Retry up to MAX_RETRY_BATCH FAILED deliveries one after another; stuck PROCESSING rows are skipped. */
 export async function retryAllFailedWebhookEvents(
   fetchImpl?: typeof fetch,
 ): Promise<{ retried: number; processed: number; failed: number }> {
-  const rows = await listFailedWebhookEvents(MAX_RETRY_BATCH);
+  const rows = await db.webhookEvent.findMany({
+    where: { provider: "meta", status: "FAILED" },
+    orderBy: { receivedAt: "desc" },
+    take: MAX_RETRY_BATCH,
+    select: { id: true },
+  });
   let processed = 0;
   let failed = 0;
+  let retried = 0;
   for (const row of rows) {
-    const status = await retryWebhookEvent(row.id, fetchImpl);
+    let status: WebhookStatus;
+    try {
+      status = await retryWebhookEvent(row.id, fetchImpl);
+    } catch (err) {
+      // Claimed by a concurrent per-row retry since we listed it: skip rather than reprocess.
+      if (err instanceof WebhookEventNotRetryableError || err instanceof WebhookEventNotFoundError) continue;
+      throw err;
+    }
+    retried++;
     if (status === "PROCESSED") processed++;
     else if (status === "FAILED") failed++;
   }
-  return { retried: rows.length, processed, failed };
+  return { retried, processed, failed };
 }

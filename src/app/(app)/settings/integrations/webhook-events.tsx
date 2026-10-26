@@ -28,8 +28,18 @@ function StatusBadge({ status }: { status: WebhookStatus }) {
 
 const errorText = (e: WebhookEventRow) => e.error ?? (e.status === "PROCESSING" ? "Processing never finished" : "Unknown error");
 
-/** Meta lead deliveries that failed or got stuck, each retryable: cards below md, a table from md up. */
+const STUCK_HINT = "Waiting on a redelivery or a later sweep";
+
+/** Retry for FAILED rows; stuck PROCESSING rows may still be running, so they only get a hint. */
+function RowAction({ event, disabled }: { event: WebhookEventRow; disabled: boolean }) {
+  if (event.status !== "FAILED") return <span className="text-sm text-fg-muted">{STUCK_HINT}</span>;
+  return <RetryButton event={event} disabled={disabled} />;
+}
+
+/** Meta lead deliveries that failed or got stuck; failed ones are retryable. Cards below md, a table from md up. */
 export function WebhookEvents({ events }: { events: WebhookEventRow[] }) {
+  const [retryingAll, setRetryingAll] = useState(false);
+  const hasFailed = events.some((e) => e.status === "FAILED");
   return (
     <section className="flex flex-col gap-3" aria-labelledby="webhook-events-heading">
       <div className="flex items-center justify-between gap-2">
@@ -39,7 +49,7 @@ export function WebhookEvents({ events }: { events: WebhookEventRow[] }) {
           </h2>
           <p className="text-sm text-fg-muted">Meta lead deliveries that failed. Fix the cause, then retry.</p>
         </div>
-        {events.length > 0 && <RetryAllButton />}
+        {hasFailed && <RetryAllButton onPendingChange={setRetryingAll} />}
       </div>
 
       {events.length === 0 ? (
@@ -55,7 +65,9 @@ export function WebhookEvents({ events }: { events: WebhookEventRow[] }) {
                 </span>
                 <span className="text-sm break-words text-fg-muted">{errorText(e)}</span>
                 <span className="text-sm text-fg-muted">Received {formatIstDateTime(e.receivedAt)}</span>
-                <RetryButton event={e} />
+                <span className="flex justify-end">
+                  <RowAction event={e} disabled={retryingAll} />
+                </span>
               </li>
             ))}
           </ul>
@@ -81,7 +93,7 @@ export function WebhookEvents({ events }: { events: WebhookEventRow[] }) {
                   <td className={`${TD} break-words text-fg-muted`}>{errorText(e)}</td>
                   <td className={`${TD} text-fg-muted tabular-nums`}>{formatIstDateTime(e.receivedAt)}</td>
                   <td className={`${TD} text-right`}>
-                    <RetryButton event={e} />
+                    <RowAction event={e} disabled={retryingAll} />
                   </td>
                 </tr>
               ))}
@@ -93,7 +105,7 @@ export function WebhookEvents({ events }: { events: WebhookEventRow[] }) {
   );
 }
 
-function RetryButton({ event }: { event: WebhookEventRow }) {
+function RetryButton({ event, disabled }: { event: WebhookEventRow; disabled: boolean }) {
   const { pending, error, run } = useAction();
   const [stillFailing, setStillFailing] = useState(false);
 
@@ -108,7 +120,7 @@ function RetryButton({ event }: { event: WebhookEventRow }) {
 
   return (
     <span className="flex flex-col items-end gap-1">
-      <Button variant="secondary" size="sm" disabled={pending} onClick={retry} aria-label={`Retry lead ${event.externalId}`}>
+      <Button variant="secondary" size="sm" disabled={pending || disabled} onClick={retry} aria-label={`Retry lead ${event.externalId}`}>
         <RotateCw aria-hidden="true" />
         Retry
       </Button>
@@ -117,17 +129,19 @@ function RetryButton({ event }: { event: WebhookEventRow }) {
   );
 }
 
-function RetryAllButton() {
+function RetryAllButton({ onPendingChange }: { onPendingChange: (pending: boolean) => void }) {
   const { pending, error, run } = useAction();
   const [summary, setSummary] = useState<string | null>(null);
 
   async function retryAll() {
     setSummary(null);
+    onPendingChange(true);
     await run(async () => {
       const result = await retryAllFailedAction();
       if (result.ok) setSummary(`${result.processed} of ${result.retried} imported`);
       return result;
     });
+    onPendingChange(false);
   }
 
   return (

@@ -40,4 +40,25 @@ describe("WebhookEvents", () => {
     await userEvent.click(screen.getByRole("button", { name: "Retry all" }));
     expect(await screen.findByRole("status")).toHaveTextContent("1 of 1 imported");
   });
+
+  it("shows stuck rows without a Retry button", () => {
+    render(
+      <WebhookEvents
+        events={[{ id: "e2", externalId: "L2", status: "PROCESSING", error: null, receivedAt: new Date("2026-10-26T05:00:00Z") }]}
+      />,
+    );
+    expect(screen.queryByRole("button", { name: /retry/i })).not.toBeInTheDocument();
+    expect(screen.getAllByText("Waiting on a redelivery or a later sweep").length).toBeGreaterThan(0);
+  });
+
+  it("disables per-row Retry while Retry all is pending", async () => {
+    let finish!: (v: unknown) => void;
+    retryAllFailedAction.mockReturnValue(new Promise((r) => (finish = r)));
+    render(<WebhookEvents events={events} />);
+    await userEvent.click(screen.getByRole("button", { name: "Retry all" }));
+    for (const b of screen.getAllByRole("button", { name: "Retry lead L1" })) expect(b).toBeDisabled();
+    finish({ ok: true, retried: 1, processed: 1, failed: 0 });
+    expect(await screen.findByRole("status")).toHaveTextContent("1 of 1 imported");
+    for (const b of screen.getAllByRole("button", { name: "Retry lead L1" })) expect(b).toBeEnabled();
+  });
 });

@@ -80,25 +80,36 @@ describe("webhook retry", () => {
     expect(await listFailedWebhookEvents()).toEqual([]);
 
     // A processed row is not reprocessed by a second retry.
-    expect(await actions.retryWebhookEventAction(failed[0].id)).toEqual({ ok: true, status: "PROCESSED" });
+    expect(await actions.retryWebhookEventAction(failed[0].id)).toEqual({
+      ok: false,
+      error: "Only failed deliveries can be retried",
+    });
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
-  it("lists stale PROCESSING rows but not fresh ones, and retry-all handles both FAILED and stale", async () => {
+  it("lists stale PROCESSING rows but never resets them; retry-all retries only FAILED rows", async () => {
     await deliverFailed("L1");
     const old = new Date(Date.now() - 20 * 60_000);
-    await db.webhookEvent.create({ data: { provider: "meta", externalId: "L2", status: "PROCESSING", receivedAt: old, raw: {} } });
+    const stale = await db.webhookEvent.create({
+      data: { provider: "meta", externalId: "L2", status: "PROCESSING", receivedAt: old, raw: {} },
+    });
     await db.webhookEvent.create({ data: { provider: "meta", externalId: "L3", status: "PROCESSING", raw: {} } });
     expect((await listFailedWebhookEvents()).map((e) => e.externalId).sort()).toEqual(["L1", "L2"]);
 
     process.env.META_ACCESS_TOKEN = "tok";
     resetEnvForTests();
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async (url: string) => new Response(JSON.stringify(graphLead(url.includes("/L1?") ? "L1" : "L2")))),
-    );
-    expect(await actions.retryAllFailedAction()).toEqual({ ok: true, retried: 2, processed: 2, failed: 0 });
-    expect(await db.lead.count()).toBe(2);
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify(graphLead("L1"))));
+    vi.stubGlobal("fetch", fetchMock);
+
+    expect(await actions.retryWebhookEventAction(stale.id)).toEqual({ ok: false, error: "Only failed deliveries can be retried" });
+    expect(await db.webhookEvent.findUniqueOrThrow({ where: { id: stale.id } })).toMatchObject({ status: "PROCESSING", error: null });
+    expect(fetchMock).not.toHaveBeenCalled();
+
+    expect(await actions.retryAllFailedAction()).toEqual({ ok: true, retried: 1, processed: 1, failed: 0 });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(await db.lead.count()).toBe(1);
+    expect((await db.webhookEvent.findFirstOrThrow({ where: { externalId: "L1" } })).status).toBe("PROCESSED");
+    expect((await db.webhookEvent.findUniqueOrThrow({ where: { id: stale.id } })).status).toBe("PROCESSING");
     expect((await db.webhookEvent.findFirstOrThrow({ where: { externalId: "L3" } })).status).toBe("PROCESSING");
   });
 
