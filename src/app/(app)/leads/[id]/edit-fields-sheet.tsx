@@ -7,8 +7,8 @@ import { Input } from "@/components/ui/input";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { formatRupees } from "@/lib/money";
 import { updateFieldsAction, type FieldsPatch } from "./actions";
-import { Field, FormError, nativeControl } from "./field";
-import { useAction } from "./use-action";
+import { Field, FormError, nativeControl } from "@/components/ui/field";
+import { useAction } from "@/lib/use-action";
 
 export type EditableLead = {
   id: string;

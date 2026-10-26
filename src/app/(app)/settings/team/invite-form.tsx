@@ -5,8 +5,8 @@ import { UserPlus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
-import { Field, FormError, nativeControl } from "@/app/(app)/leads/[id]/field";
-import { useAction } from "@/app/(app)/leads/[id]/use-action";
+import { Field, FormError, nativeControl } from "@/components/ui/field";
+import { useAction } from "@/lib/use-action";
 import { inviteUserAction, type FieldErrors } from "../actions";
 import { TemporaryPassword } from "../temporary-password";
 

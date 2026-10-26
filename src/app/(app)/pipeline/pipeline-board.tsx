@@ -15,8 +15,8 @@ import {
 import type { LeadStage } from "@/generated/prisma/enums";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
-import type { ActionResult } from "@/app/(app)/leads/[id]/actions";
-import { useAction } from "@/app/(app)/leads/[id]/use-action";
+import type { ActionResult } from "@/lib/use-action";
+import { useAction } from "@/lib/use-action";
 import type { PipelineCardItem, PipelineColumn as Column } from "@/lib/leads/queries";
 import { STAGE_LABELS, canTransition } from "@/lib/stages";
 import { MoveSheet } from "./move-sheet";

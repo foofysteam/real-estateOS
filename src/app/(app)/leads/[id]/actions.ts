@@ -6,6 +6,7 @@ import { db } from "@/lib/db";
 import { FollowUpChannel, LeadStage } from "@/generated/prisma/enums";
 import { ForbiddenError, requireUser } from "@/lib/auth/current-user";
 import { parseRupees } from "@/lib/money";
+import type { ActionResult } from "@/lib/use-action";
 import {
   addNote,
   assertCanCompleteFollowUp,
@@ -21,7 +22,6 @@ import {
   type LeadFieldPatch,
 } from "@/lib/leads/service";
 
-export type ActionResult = { ok: true } | { ok: false; error: string };
 
 class ActionError extends Error {}
 

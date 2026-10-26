@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 
-/** Label + control + optional error, shared by the lead detail sheets. */
+/** Label + control + optional error, shared by form sheets and dialogs. */
 export function Field({ id, label, error, children }: { id: string; label: string; error?: string; children: ReactNode }) {
   return (
     <div className="flex flex-col gap-1.5">

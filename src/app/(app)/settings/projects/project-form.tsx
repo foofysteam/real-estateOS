@@ -5,8 +5,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { formatRupeesShort, parseRupees } from "@/lib/money";
 import { createProjectAction, updateProjectAction, type FieldErrors } from "../actions";
-import { Field, FormError } from "@/app/(app)/leads/[id]/field";
-import { useAction } from "@/app/(app)/leads/[id]/use-action";
+import { Field, FormError } from "@/components/ui/field";
+import { useAction } from "@/lib/use-action";
 
 export type EditableProject = {
   id: string;

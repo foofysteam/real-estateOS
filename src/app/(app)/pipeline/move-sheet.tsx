@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import type { PipelineCardItem } from "@/lib/leads/queries";
 import { STAGE_LABELS, STAGE_ORDER, canTransition } from "@/lib/stages";
-import { Field } from "@/app/(app)/leads/[id]/field";
+import { Field } from "@/components/ui/field";
 
 type Props = {
   lead: PipelineCardItem | null;

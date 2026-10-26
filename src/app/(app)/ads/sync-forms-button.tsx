@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { useAction } from "../leads/[id]/use-action";
+import { useAction } from "@/lib/use-action";
 import { syncLeadFormsAction } from "./actions";
 
 /** Stores the page's current lead-form ids on the Meta connection and reports the outcome inline. */

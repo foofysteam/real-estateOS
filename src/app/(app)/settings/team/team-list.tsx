@@ -1,12 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { KeyRound } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
-import { FormError } from "@/app/(app)/leads/[id]/field";
-import { useAction } from "@/app/(app)/leads/[id]/use-action";
+import { FormError } from "@/components/ui/field";
+import { useAction } from "@/lib/use-action";
 import { resetPasswordAction, setUserActiveAction } from "../actions";
 import { ActiveToggle } from "../active-toggle";
 import { TemporaryPassword } from "../temporary-password";
@@ -76,26 +76,31 @@ function ResetPasswordButton({ user }: { user: TeamRow }) {
   const [open, setOpen] = useState(false);
   const [password, setPassword] = useState<string | null>(null);
   const { pending, error, run, clearError } = useAction();
+  // Bumped on every open/close: a result that arrives for an earlier dialog session is dropped.
+  const session = useRef(0);
 
   function reset() {
+    const token = session.current;
     run(async () => {
       const result = await resetPasswordAction(user.id);
-      if (result.ok) setPassword(result.temporaryPassword);
+      if (result.ok && session.current === token) setPassword(result.temporaryPassword);
       return result;
     });
   }
 
+  function handleOpenChange(next: boolean) {
+    // Stay open while a reset is in flight so its new password is shown to whoever asked for it.
+    if (!next && pending) return;
+    session.current += 1;
+    // Closing forgets the password: it is shown once.
+    setPassword(null);
+    clearError();
+    setOpen(next);
+  }
+
   return (
-    <Dialog
-      open={open}
-      onOpenChange={(o) => {
-        // Closing forgets the password: it is shown once.
-        setPassword(null);
-        clearError();
-        setOpen(o);
-      }}
-    >
-      <Button variant="ghost" size="sm" onClick={() => setOpen(true)} aria-label={`Reset password for ${user.name}`}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
+      <Button variant="ghost" size="sm" onClick={() => handleOpenChange(true)} aria-label={`Reset password for ${user.name}`}>
         <KeyRound aria-hidden="true" />
         Reset password
       </Button>
@@ -103,14 +108,14 @@ function ResetPasswordButton({ user }: { user: TeamRow }) {
         {password ? (
           <div className="flex flex-col gap-4">
             <TemporaryPassword password={password} />
-            <Button onClick={() => setOpen(false)}>Done</Button>
+            <Button onClick={() => handleOpenChange(false)}>Done</Button>
           </div>
         ) : (
           <div className="flex flex-col gap-4">
             <p className="text-sm text-fg-muted">Their current password stops working right away.</p>
             <FormError error={error} />
             <div className="flex justify-end gap-2">
-              <Button variant="secondary" onClick={() => setOpen(false)}>
+              <Button variant="secondary" onClick={() => handleOpenChange(false)} disabled={pending}>
                 Cancel
               </Button>
               <Button variant="danger" onClick={reset} disabled={pending}>

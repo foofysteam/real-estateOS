@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { GENERIC_ERROR, useAction } from "@/app/(app)/leads/[id]/use-action";
-import type { ActionResult } from "@/app/(app)/leads/[id]/actions";
+import { GENERIC_ERROR, useAction } from "@/lib/use-action";
+import type { ActionResult } from "@/lib/use-action";
 
 afterEach(cleanup);
 

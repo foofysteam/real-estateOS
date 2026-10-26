@@ -7,8 +7,8 @@ import { CHANNEL_LABELS } from "@/lib/channels";
 import { formatIstDateTime } from "@/lib/dates";
 import type { LeadDetail } from "@/lib/leads/queries";
 import { completeFollowUpAction } from "./actions";
-import { FormError } from "./field";
-import { useAction } from "./use-action";
+import { FormError } from "@/components/ui/field";
+import { useAction } from "@/lib/use-action";
 
 export function OpenFollowUps({ items }: { items: LeadDetail["followUps"] }) {
   const { pending, error, run } = useAction();

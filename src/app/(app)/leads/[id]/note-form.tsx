@@ -3,8 +3,8 @@
 import { useState, type FormEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { addNoteAction } from "./actions";
-import { FormError, nativeControl } from "./field";
-import { useAction } from "./use-action";
+import { FormError, nativeControl } from "@/components/ui/field";
+import { useAction } from "@/lib/use-action";
 
 export function NoteForm({ leadId }: { leadId: string }) {
   const [text, setText] = useState("");

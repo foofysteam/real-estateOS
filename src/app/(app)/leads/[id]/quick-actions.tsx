@@ -10,7 +10,7 @@ import { AssignDialog, type Owner } from "./assign-dialog";
 import { FollowUpDialog } from "./follow-up-dialog";
 import { LogContactDialog } from "./log-contact-dialog";
 import { StageDialog } from "./stage-dialog";
-import { useAction } from "./use-action";
+import { useAction } from "@/lib/use-action";
 
 type SheetName = "contact" | "followUp" | "stage" | "assign";
 

@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { STAGE_LABELS, STAGE_ORDER, canTransition } from "@/lib/stages";
-import { Field, FormError, nativeControl } from "./field";
+import { Field, FormError, nativeControl } from "@/components/ui/field";
 
 type Props = {
   current: LeadStage;

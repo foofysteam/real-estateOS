@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import type { ActionResult } from "./actions";
+
+export type ActionResult = { ok: true } | { ok: false; error: string };
 
 export const GENERIC_ERROR = "Something went wrong. Try again.";
 

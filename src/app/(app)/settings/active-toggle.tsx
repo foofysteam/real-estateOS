@@ -2,7 +2,7 @@
 
 import { cn } from "@/lib/cn";
 import type { SettingsResult } from "./actions";
-import { useAction } from "@/app/(app)/leads/[id]/use-action";
+import { useAction } from "@/lib/use-action";
 
 /** A 44 px switch that calls a server action; the page re-renders with the new state on success. */
 export function ActiveToggle({

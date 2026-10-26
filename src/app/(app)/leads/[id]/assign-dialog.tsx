@@ -3,7 +3,7 @@
 import { useState, type FormEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
-import { Field, FormError, nativeControl } from "./field";
+import { Field, FormError, nativeControl } from "@/components/ui/field";
 
 export type Owner = { id: string; name: string };
 
