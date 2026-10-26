@@ -81,6 +81,14 @@ describe("integration and import actions", () => {
     expect(await db.metaConnection.count()).toBe(0);
   });
 
+  it("saveMetaConnectionAction requires an https MCP URL", async () => {
+    const r = await actions.saveMetaConnectionAction({ ...meta, mcpUrl: "http://mcp.example.com/mcp" });
+    expect(r).toEqual({ ok: false, error: expect.any(String), fieldErrors: { mcpUrl: "MCP URL must use https" } });
+    expect(await db.metaConnection.count()).toBe(0);
+    expect(await actions.saveMetaConnectionAction({ ...meta, mcpUrl: "https://mcp.example.com/mcp" })).toEqual({ ok: true });
+    expect((await db.metaConnection.findFirstOrThrow()).mcpUrl).toBe("https://mcp.example.com/mcp");
+  });
+
   it("testMetaConnectionAction reports the campaign count or a capped error", async () => {
     expect(await actions.testMetaConnectionAction()).toEqual({ ok: false, error: expect.stringMatching(/save/i) });
     await actions.saveMetaConnectionAction(meta);

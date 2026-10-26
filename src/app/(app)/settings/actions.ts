@@ -144,7 +144,13 @@ const metaConnectionSchema = z.object({
   pageId: metaId,
   adAccountId: metaId,
   accessToken: z.preprocess(emptyToUndefined, z.string().max(1024, "Token is too long").optional()),
-  mcpUrl: z.preprocess(emptyToUndefined, z.url("Enter a full URL").optional()),
+  mcpUrl: z.preprocess(
+    emptyToUndefined,
+    z
+      .url("Enter a full URL")
+      .refine((u) => u.toLowerCase().startsWith("https://"), "MCP URL must use https")
+      .optional(),
+  ),
 });
 export type MetaConnectionForm = z.input<typeof metaConnectionSchema>;
 
