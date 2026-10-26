@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parseRupees, formatRupees, formatRupeesShort } from "@/lib/money";
+import { parseRupees, formatRupees, formatRupeesExact, formatRupeesShort } from "@/lib/money";
 
 describe("money", () => {
   it.each<[string | number, number | null]>([
@@ -22,5 +22,11 @@ describe("money", () => {
     expect(formatRupeesShort(4500000)).toBe("₹45L");
     expect(formatRupeesShort(12000000)).toBe("₹1.2Cr");
     expect(formatRupeesShort(50000)).toBe("₹50K");
+  });
+
+  it("formats exact amounts with at most two decimals", () => {
+    expect(formatRupeesExact(246.9)).toBe("₹246.9");
+    expect(formatRupeesExact(1234.567)).toBe("₹1,234.57");
+    expect(formatRupeesExact(500)).toBe("₹500");
   });
 });

@@ -46,3 +46,15 @@ export function formatRupeesShort(rupees: number): string {
   }
   return formatRupees(rupees);
 }
+
+const exactRupeeFormatter = new Intl.NumberFormat("en-IN", {
+  style: "currency",
+  currency: "INR",
+  minimumFractionDigits: 0,
+  maximumFractionDigits: 2,
+});
+
+/** "₹1,234.57" — for fractional amounts such as Meta cost per lead; at most two decimals. */
+export function formatRupeesExact(rupees: number): string {
+  return exactRupeeFormatter.format(rupees);
+}
