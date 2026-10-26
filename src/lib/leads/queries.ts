@@ -119,3 +119,34 @@ export async function listLeads(
   const items = rows.slice(0, take);
   return { items, nextCursor: rows.length > take ? items[items.length - 1].id : null };
 }
+
+const leadDetailInclude = {
+  project: { select: { id: true, name: true } },
+  owner: { select: { id: true, name: true } },
+  events: { include: { actor: { select: { id: true, name: true } } }, orderBy: [{ createdAt: "desc" }, { id: "desc" }] },
+  followUps: {
+    where: { completedAt: null },
+    include: { owner: { select: { id: true, name: true } } },
+    orderBy: [{ dueAt: "asc" }, { id: "asc" }],
+  },
+} as const satisfies Prisma.LeadInclude;
+
+export type LeadDetail = Prisma.LeadGetPayload<{ include: typeof leadDetailInclude }> & {
+  /** Names of users referenced by ASSIGNED events, so the timeline can say "Assigned to <name>". */
+  userNames: Record<string, string>;
+};
+
+/** Lead with project, owner, events (newest first, with actor) and open follow-ups (soonest first). */
+export async function getLeadDetail(id: string): Promise<LeadDetail | null> {
+  const lead = await db.lead.findUnique({ where: { id }, include: leadDetailInclude });
+  if (!lead) return null;
+  const ids = new Set<string>();
+  for (const e of lead.events) {
+    const to = e.type === "ASSIGNED" ? (e.payload as { to?: unknown } | null)?.to : null;
+    if (typeof to === "string") ids.add(to);
+  }
+  const users = ids.size
+    ? await db.user.findMany({ where: { id: { in: [...ids] } }, select: { id: true, name: true } })
+    : [];
+  return { ...lead, userNames: Object.fromEntries(users.map((u) => [u.id, u.name])) };
+}
