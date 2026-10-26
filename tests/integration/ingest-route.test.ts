@@ -74,6 +74,15 @@ describe("POST /api/ingest", () => {
     expect(await db.lead.count()).toBe(0);
   });
 
+  it("treats blank optional strings as absent", async () => {
+    const k = await createIngestKey("site", "WEBSITE");
+    const res = await POST(
+      req({ name: "R", phone: "9845012345", email: "", locality: "  ", configuration: "", notes: "", projectSlug: "", externalId: "" }, k.plaintext),
+    );
+    expect(res.status).toBe(201);
+    expect(await db.lead.findFirstOrThrow()).toMatchObject({ email: null, locality: null, configuration: null });
+  });
+
   it("returns 202 on duplicate", async () => {
     const k = await createIngestKey("site", "WEBSITE");
     const res1 = await POST(req({ name: "R", phone: "9845012345" }, k.plaintext));

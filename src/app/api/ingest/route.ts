@@ -3,12 +3,13 @@ import { z } from "zod";
 import { resolveIngestKey } from "@/lib/ingest-keys";
 import { ingestLead, InvalidPhoneError } from "@/lib/leads/ingest";
 import { MAX_RUPEES, parseRupees } from "@/lib/money";
+import { blankAsAbsent } from "@/lib/zod-helpers";
 
 const bodySchema = z.object({
   name: z.string().trim().min(1).max(120),
   phone: z.string().min(1),
-  email: z.email().optional(),
-  projectSlug: z.string().optional(),
+  email: blankAsAbsent(z.email()),
+  projectSlug: blankAsAbsent(z.string()),
   budget: z
     .union([z.string(), z.number()])
     .transform((value, ctx) => {
@@ -24,10 +25,10 @@ const bodySchema = z.object({
       return rupees;
     })
     .optional(),
-  configuration: z.string().optional(),
-  locality: z.string().optional(),
-  notes: z.string().optional(),
-  externalId: z.string().optional(),
+  configuration: blankAsAbsent(z.string()),
+  locality: blankAsAbsent(z.string()),
+  notes: blankAsAbsent(z.string()),
+  externalId: blankAsAbsent(z.string()),
 });
 
 function unprocessable(issues: unknown[]) {

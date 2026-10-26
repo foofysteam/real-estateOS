@@ -15,6 +15,7 @@ import {
 } from "@/lib/meta/webhook-admin";
 import type { WebhookStatus } from "@/generated/prisma/enums";
 import { CSV_IMPORT_SOURCES, INGEST_KEY_SOURCES } from "@/lib/sources";
+import { emptyToUndefined } from "@/lib/zod-helpers";
 import {
   createProject,
   DuplicateSlugError,
@@ -138,13 +139,12 @@ const IMPORT_PATHS: RevalidateTarget[] = [["/leads"], ["/pipeline"], ["/today"]]
 const MAX_ERROR = 300;
 const MAX_CSV_BYTES = 2 * 1024 * 1024;
 
-const blankToUndefined = (v: unknown) => (typeof v === "string" && v.trim() === "" ? undefined : v);
 const metaId = z.string().trim().min(1, "Required").max(64, "64 characters at most");
 const metaConnectionSchema = z.object({
   pageId: metaId,
   adAccountId: metaId,
-  accessToken: z.preprocess(blankToUndefined, z.string().max(1024, "Token is too long").optional()),
-  mcpUrl: z.preprocess(blankToUndefined, z.url("Enter a full URL").optional()),
+  accessToken: z.preprocess(emptyToUndefined, z.string().max(1024, "Token is too long").optional()),
+  mcpUrl: z.preprocess(emptyToUndefined, z.url("Enter a full URL").optional()),
 });
 export type MetaConnectionForm = z.input<typeof metaConnectionSchema>;
 

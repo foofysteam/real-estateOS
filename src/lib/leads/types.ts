@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { LeadSource } from "@/generated/prisma/client";
 import { MAX_RUPEES } from "@/lib/money";
+import { blankAsAbsent } from "@/lib/zod-helpers";
 
 /** Spec §5.1: every inbound source maps into this shape before ingest. */
 export type NormalizedLead = {
@@ -21,12 +22,12 @@ export const normalizedLeadSchema: z.ZodType<NormalizedLead> = z.object({
   source: z.enum(LeadSource),
   name: z.string().trim().min(1).max(120),
   phone: z.string().min(1),
-  email: z.email().optional(),
-  projectSlug: z.string().optional(),
+  email: blankAsAbsent(z.email()),
+  projectSlug: blankAsAbsent(z.string()),
   budgetRupees: z.number().int().nonnegative().max(MAX_RUPEES, "Budget too large").optional(),
-  configuration: z.string().optional(),
-  locality: z.string().optional(),
-  notes: z.string().optional(),
-  externalId: z.string().optional(),
+  configuration: blankAsAbsent(z.string()),
+  locality: blankAsAbsent(z.string()),
+  notes: blankAsAbsent(z.string()),
+  externalId: blankAsAbsent(z.string()),
   receivedAt: z.coerce.date(),
 });
