@@ -23,7 +23,12 @@ describe("POST /api/auth/login", () => {
     expect(cookie).toMatch(/sales_os_session=.+HttpOnly/);
     const token = /sales_os_session=([^;]+)/.exec(cookie)![1];
     const user = await db.user.findUniqueOrThrow({ where: { email: "admin@sc.studio" } });
-    expect(verifySession(token)?.userId).toBe(user.id);
+    const session = verifySession(token);
+    expect(session?.userId).toBe(user.id);
+    const thirtyDays = 30 * 24 * 60 * 60 * 1000;
+    expect(Math.abs(session!.exp - (Date.now() + thirtyDays))).toBeLessThan(60_000);
+    const expires = Date.parse(/Expires=([^;]+)/.exec(cookie)![1]);
+    expect(Math.abs(expires - (Date.now() + thirtyDays))).toBeLessThan(60_000);
     const json = await res.json();
     expect(json.user).toEqual({ id: user.id, email: "admin@sc.studio", name: "Admin", role: "ADMIN" });
   });

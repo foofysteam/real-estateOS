@@ -3,6 +3,8 @@ import { getEnv } from "@/lib/env";
 
 export const SESSION_COOKIE = "sales_os_session";
 
+export const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+
 export type SessionPayload = { userId: string; exp: number };
 
 function sign(data: string): Buffer {

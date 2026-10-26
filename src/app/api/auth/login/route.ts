@@ -2,9 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { hashPassword, verifyPassword } from "@/lib/auth/password";
-import { SESSION_COOKIE, sessionCookieOptions, signSession } from "@/lib/auth/session";
-
-const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+import { SESSION_COOKIE, SESSION_TTL_MS, sessionCookieOptions, signSession } from "@/lib/auth/session";
 
 const bodySchema = z.object({
   email: z.string().trim().toLowerCase().min(1),
