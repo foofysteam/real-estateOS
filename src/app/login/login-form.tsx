@@ -4,7 +4,7 @@ import { useActionState, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import type { LoginState } from "./actions";
+import type { LoginState } from "./login-state";
 
 type Props = { action: (prev: LoginState, formData: FormData) => Promise<LoginState> };
 
