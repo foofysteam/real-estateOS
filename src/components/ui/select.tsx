@@ -15,7 +15,7 @@ export function SelectTrigger({
   return (
     <RadixSelect.Trigger
       className={cn(
-        "inline-flex min-h-11 w-full min-w-0 items-center justify-between gap-2 rounded-md border border-border bg-surface px-3 text-base text-fg md:min-h-9 md:text-sm",
+        "inline-flex min-h-11 w-full min-w-0 items-center justify-between gap-2 rounded-md border border-border bg-surface px-3 text-base text-fg lg:min-h-9 md:text-sm",
         "transition-[border-color] focus-visible:border-accent disabled:opacity-50 data-[placeholder]:text-fg-muted",
         className,
       )}
@@ -54,7 +54,7 @@ export function SelectItem({ className, children, ...props }: ComponentProps<typ
   return (
     <RadixSelect.Item
       className={cn(
-        "relative flex min-h-11 cursor-default items-center rounded-sm pr-8 pl-2 text-sm outline-none select-none md:min-h-8",
+        "relative flex min-h-11 cursor-default items-center rounded-sm pr-8 pl-2 text-sm outline-none select-none lg:min-h-8",
         "data-[highlighted]:bg-surface-2 data-[disabled]:opacity-50",
         className,
       )}

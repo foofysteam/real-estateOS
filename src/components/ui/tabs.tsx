@@ -20,7 +20,7 @@ export function TabsTrigger({ className, ...props }: ComponentProps<typeof Radix
   return (
     <RadixTabs.Trigger
       className={cn(
-        "-mb-px inline-flex min-h-11 shrink-0 items-center border-b-2 border-transparent px-3 text-sm font-medium whitespace-nowrap text-fg-muted md:min-h-9",
+        "-mb-px inline-flex min-h-11 shrink-0 items-center border-b-2 border-transparent px-3 text-sm font-medium whitespace-nowrap text-fg-muted lg:min-h-9",
         "transition-[color,border-color] hover:text-fg data-[state=active]:border-accent data-[state=active]:text-fg",
         className,
       )}

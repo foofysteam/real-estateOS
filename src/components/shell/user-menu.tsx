@@ -60,7 +60,7 @@ export function UserMenu({ name, email, role }: { name: string; email: string; r
           <DropdownMenu.Item
             onSelect={logout}
             disabled={pending}
-            className="flex min-h-11 cursor-default items-center gap-2 rounded-sm px-2 text-sm outline-none select-none data-[disabled]:opacity-50 data-[highlighted]:bg-surface-2 md:min-h-9"
+            className="flex min-h-11 cursor-default items-center gap-2 rounded-sm px-2 text-sm outline-none select-none data-[disabled]:opacity-50 data-[highlighted]:bg-surface-2 lg:min-h-9"
           >
             <LogOut className="size-4 text-fg-muted" aria-hidden="true" />
             Log out
