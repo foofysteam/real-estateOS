@@ -2,6 +2,7 @@ import { describe, it, expect, beforeAll } from "vitest";
 import { db } from "@/lib/db";
 import { istDayBounds } from "@/lib/dates";
 import { verifyPassword } from "@/lib/auth/password";
+import { computeScore } from "@/lib/score";
 import { resolveIngestKey } from "@/lib/ingest-keys";
 import { SOURCE_ORDER } from "@/lib/sources";
 import { seed } from "../../prisma/seed";
@@ -73,10 +74,71 @@ describe("seed", () => {
     expect(new Set(stored.map((k) => k.source))).toEqual(new Set(["WEBSITE", "PORTAL_99ACRES"]));
   });
 
-  it("is deterministic: the same seed produces the same leads", async () => {
-    const before = (await db.lead.findMany({ orderBy: { phone: "asc" } })).map((l) => [l.phone, l.name, l.stage, l.source]);
+  it("matches what the lead services would have written", async () => {
+    const leads = await db.lead.findMany({ include: { project: true, events: true } });
+    const followUpIds = new Set((await db.followUp.findMany({ select: { id: true } })).map((f) => f.id));
+    for (const lead of leads) {
+      const { source, budgetRupees, configuration, locality, email, project } = lead;
+      expect(lead.score).toBe(computeScore({ source, budgetRupees, configuration, locality, email, project }));
+
+      const created = lead.events.filter((e) => e.type === "CREATED");
+      expect(created).toHaveLength(1);
+      expect(created[0].payload).toEqual({ source: lead.source, score: lead.score });
+
+      if (lead.ownerId) {
+        expect(lead.events.some((e) => e.type === "ASSIGNED" && (e.payload as { to?: string }).to === lead.ownerId)).toBe(true);
+      }
+
+      const stageEvents = lead.events.filter((e) => e.type === "STAGE_CHANGED");
+      if (lead.stage === "NEW") {
+        expect(stageEvents).toHaveLength(0);
+      } else {
+        const payloads = stageEvents.map((e) => e.payload as { to?: string; lostReason?: string });
+        const toStage = payloads.filter((p) => p.to === lead.stage);
+        expect(toStage).toHaveLength(1);
+        expect("lostReason" in toStage[0]).toBe(lead.stage === "LOST");
+        if (lead.stage === "LOST") expect(toStage[0].lostReason).toBe(lead.lostReason);
+      }
+
+      for (const e of lead.events.filter((ev) => ev.type === "FOLLOW_UP_SCHEDULED")) {
+        expect(followUpIds.has((e.payload as { followUpId: string }).followUpId)).toBe(true);
+      }
+    }
+  });
+
+  it("is deterministic: the same seed produces the same rows (time-dependent fields aside)", async () => {
+    const snapshot = async () => {
+      const leads = await db.lead.findMany({ include: { owner: true, project: true }, orderBy: { phone: "asc" } });
+      const followUps = await db.followUp.findMany({ include: { lead: true, owner: true } });
+      return {
+        leads: leads.map((l) => ({
+          phone: l.phone,
+          name: l.name,
+          email: l.email,
+          source: l.source,
+          stage: l.stage,
+          score: l.score,
+          budgetRupees: l.budgetRupees,
+          configuration: l.configuration,
+          locality: l.locality,
+          notes: l.notes,
+          lostReason: l.lostReason,
+          ownerEmail: l.owner?.email ?? null,
+          projectSlug: l.project?.slug ?? null,
+        })),
+        followUps: followUps
+          .map((f) => ({
+            leadPhone: f.lead.phone,
+            ownerEmail: f.owner?.email ?? null,
+            channel: f.channel,
+            note: f.note,
+            completedAt: f.completedAt,
+          }))
+          .sort((a, b) => a.leadPhone.localeCompare(b.leadPhone)),
+      };
+    };
+    const before = await snapshot();
     await seed(db);
-    const after = (await db.lead.findMany({ orderBy: { phone: "asc" } })).map((l) => [l.phone, l.name, l.stage, l.source]);
-    expect(after).toEqual(before);
+    expect(await snapshot()).toEqual(before);
   }, 30_000);
 });

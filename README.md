@@ -43,7 +43,7 @@ Sales OS is a mobile-first CRM for a real-estate sales team selling Bengaluru pr
 
    Use `pnpm db:deploy`, not `pnpm db:migrate`: `db:migrate` runs `prisma migrate dev`, which is interactive (it can prompt to reset the database) and is unsuitable for CI or scripted setups.
 
-   The seed is idempotent and deterministic. It creates 4 users, 3 projects (price bands in whole rupees), 200 leads across every source and stage (70 % assigned to agents), 60 open follow-ups (20 overdue, 20 due today in IST, 20 upcoming) and 2 ingest keys, `website` and `99acres`. **The ingest keys' plaintext is printed once by `pnpm db:seed`; only their hashes are stored, so copy them then.** Running the seed again replaces everything, including the keys.
+   The seed is idempotent and deterministic. It creates 4 users, 3 projects (price bands in whole rupees), 200 leads across every source and stage (70 % assigned to agents), 60 open follow-ups (20 overdue, 20 due today in IST, 20 upcoming) and 2 ingest keys, `website` and `99acres`. **The ingest keys' plaintext is printed once by `pnpm db:seed`; only their hashes are stored, so copy them then.** Running the seed again replaces everything, including the keys. Because it wipes every table, the seed refuses to run when `NODE_ENV=production` and prints "Refusing to wipe a production database. Pass --force to override."; to seed a production database deliberately, run `pnpm db:seed --force`.
 
 5. Start the app:
 

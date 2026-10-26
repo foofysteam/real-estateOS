@@ -26,7 +26,6 @@ export type SeedResult = { ingestKeys: { name: string; source: LeadSource; plain
 const HOUR = 60 * 60 * 1000;
 const DAY = 24 * HOUR;
 const LAKH = 100_000;
-const CRORE = 100 * LAKH;
 
 /** mulberry32: a tiny, fast, deterministic PRNG returning floats in [0, 1). */
 function mulberry32(seed: number): () => number {
@@ -68,8 +67,8 @@ const STAGE_COUNTS: ReadonlyArray<[LeadStage, number]> = [
 const UNASSIGNED: Partial<Record<LeadStage, number>> = { NEW: 40, CONTACTED: 20 };
 
 const PROJECTS = [
-  { name: "Aurum Heights", slug: "aurum-heights", locality: "Whitefield", min: 80 * LAKH, max: 1.6 * CRORE },
-  { name: "Banyan Grove Villas", slug: "banyan-grove-villas", locality: "Sarjapur Road", min: 1.2 * CRORE, max: 2.5 * CRORE },
+  { name: "Aurum Heights", slug: "aurum-heights", locality: "Whitefield", min: 80 * LAKH, max: 160 * LAKH },
+  { name: "Banyan Grove Villas", slug: "banyan-grove-villas", locality: "Sarjapur Road", min: 120 * LAKH, max: 250 * LAKH },
   { name: "Nimbus Residency", slug: "nimbus-residency", locality: "Electronic City", min: 45 * LAKH, max: 75 * LAKH },
 ] as const;
 
@@ -287,6 +286,10 @@ export async function seed(db: PrismaClient): Promise<SeedResult> {
 }
 
 async function main(): Promise<void> {
+  if (process.env.NODE_ENV === "production" && !process.argv.includes("--force")) {
+    console.error("Refusing to wipe a production database. Pass --force to override.");
+    process.exit(1);
+  }
   const { loadEnvConfig } = await import("@next/env");
   loadEnvConfig(process.cwd());
   // Imported only now, after .env is loaded: creating the client reads DATABASE_URL.
