@@ -40,10 +40,17 @@ export class McpMetaAdsGateway implements MetaAdsGateway {
     return rows(await this.call("listLeadForms", { page_id: pageId })).map(toLeadForm);
   }
 
-  /** Connects and lists tools once; concurrent first calls share the same promise. A failed connect is retried next call. */
+  /**
+   * Connects and lists tools once; concurrent first calls share the same promise.
+   * A failed connect, a closed transport or a rejected tool call clears the session so the next call reconnects.
+   */
   private getSession(): Promise<Session> {
-    this.session ??= (async () => {
+    if (this.session) return this.session;
+    const session: Promise<Session> = (async () => {
       const client = await this.connect();
+      client.onclose = () => {
+        if (this.session === session) this.session = undefined;
+      };
       const names: string[] = [];
       let cursor: string | undefined;
       do {
@@ -53,21 +60,43 @@ export class McpMetaAdsGateway implements MetaAdsGateway {
       } while (cursor);
       return { client, tools: new Set(names), names };
     })().catch((err: unknown) => {
-      this.session = undefined;
+      if (this.session === session) this.session = undefined;
       throw err;
     });
-    return this.session;
+    this.session = session;
+    return session;
+  }
+
+  /** Drops a broken session (closing its client best-effort) so the next call reconnects and re-lists tools. */
+  private async invalidate(session: Promise<Session>, client: Client): Promise<void> {
+    if (this.session === session) this.session = undefined;
+    try {
+      await client.close();
+    } catch {
+      // The transport is already broken; nothing more to do.
+    }
   }
 
   private async call(operation: keyof MetaAdsGateway, args: Record<string, unknown>): Promise<unknown> {
-    const { client, tools, names } = await this.getSession();
+    const session = this.getSession();
+    const { client, tools, names } = await session;
     const name = this.toolMap[operation];
     if (!tools.has(name)) throw new MetaToolUnavailableError(operation, names, name);
-    const result = await client.callTool({ name, arguments: args });
-    if (result.isError) throw new Error(`Meta MCP tool "${name}" returned an error`);
-    if (result.structuredContent !== undefined) return result.structuredContent;
+    let result: Awaited<ReturnType<Client["callTool"]>>;
+    try {
+      result = await client.callTool({ name, arguments: args });
+    } catch (err) {
+      // Tool-level failures arrive as isError results; a rejection means the transport/session is unusable.
+      await this.invalidate(session, client);
+      throw err;
+    }
     const content = Array.isArray(result.content) ? (result.content as { type: string; text?: string }[]) : [];
     const text = content.find((c) => c.type === "text")?.text;
+    if (result.isError) {
+      const detail = text?.trim().slice(0, 300);
+      throw new Error(`Meta MCP tool "${name}" returned an error${detail ? `: ${detail}` : ""}`);
+    }
+    if (result.structuredContent !== undefined) return result.structuredContent;
     if (text === undefined) throw new Error(`Meta MCP tool "${name}" returned no text content`);
     return JSON.parse(text);
   }

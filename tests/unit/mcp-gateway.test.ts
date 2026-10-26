@@ -75,4 +75,50 @@ describe("McpMetaAdsGateway", () => {
     await gw.listLeadForms("p");
     expect(connect).toHaveBeenCalledTimes(1);
   });
+
+  it("surfaces the tool's error text when the MCP tool returns isError", async () => {
+    const connect = async () => {
+      const server = new McpServer({ name: "fake-meta", version: "0" });
+      server.registerTool("ads_get_insights", { inputSchema: {} }, async () => ({
+        isError: true,
+        content: [{ type: "text" as const, text: "(#100) Invalid ad account id" }],
+      }));
+      const [a, b] = InMemoryTransport.createLinkedPair();
+      await server.connect(a);
+      const client = new Client({ name: "sales-os-test", version: "0" });
+      await client.connect(b);
+      return client;
+    };
+    const gw = new McpMetaAdsGateway({ connect });
+    const err = (await gw.getInsights("act_1", { since: "2026-10-19", until: "2026-10-26" }).catch((e: unknown) => e)) as Error;
+    expect(err).toBeInstanceOf(Error);
+    expect(err.message).toBe('Meta MCP tool "ads_get_insights" returned an error: (#100) Invalid ad account id');
+  });
+
+  it("reconnects and re-lists tools after a transport failure", async () => {
+    const base = makeConnect({ ads_get_campaigns: () => ({ data: [{ id: "c1", name: "Launch", status: "ACTIVE", objective: "OUTCOME_LEADS" }] }) });
+    let first = true;
+    const connect = vi.fn(async () => {
+      const client = await base();
+      if (first) {
+        first = false;
+        vi.spyOn(client, "callTool").mockRejectedValueOnce(new Error("SSE stream disconnected"));
+      }
+      return client;
+    });
+    const gw = new McpMetaAdsGateway({ connect });
+    await expect(gw.listCampaigns("act_1")).rejects.toThrow("SSE stream disconnected");
+    expect(await gw.listCampaigns("act_1")).toEqual([{ id: "c1", name: "Launch", status: "ACTIVE", objective: "OUTCOME_LEADS" }]);
+    expect(connect).toHaveBeenCalledTimes(2);
+  });
+
+  it("reconnects after the transport closes", async () => {
+    const connect = vi.fn(makeConnect({ ads_get_campaigns: () => ({ data: [] }) }));
+    const gw = new McpMetaAdsGateway({ connect });
+    await gw.listCampaigns("a");
+    const client = await connect.mock.results[0].value;
+    await client.close();
+    expect(await gw.listCampaigns("a")).toEqual([]);
+    expect(connect).toHaveBeenCalledTimes(2);
+  });
 });
