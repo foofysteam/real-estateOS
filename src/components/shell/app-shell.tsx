@@ -18,7 +18,7 @@ export function AppShell({ user, children }: { user: CurrentUser; children: Reac
             </div>
           </div>
         </header>
-        <main className="min-w-0 flex-1 pb-20 lg:pb-0">{children}</main>
+        <main className="min-w-0 flex-1 px-4 py-4 pb-20 lg:px-6 lg:py-6 lg:pb-6">{children}</main>
       </div>
       <ShellNav role={user.role} variant="bottom" />
     </div>

@@ -12,9 +12,9 @@ const VARIANTS: Record<ButtonVariant, string> = {
   danger: "bg-danger text-white hover:opacity-90 dark:text-bg",
 };
 
-// Every size keeps a 44 px touch target; only `sm` tightens to 36 px from md up.
+// Every size keeps a 44 px touch target; only `sm` tightens to 36 px from lg up (tablets stay touch-sized).
 const SIZES: Record<ButtonSize, string> = {
-  sm: "min-h-11 md:min-h-9 px-3 text-sm",
+  sm: "min-h-11 lg:min-h-9 px-3 text-sm",
   md: "min-h-11 px-4 text-sm",
   lg: "min-h-12 px-5 text-base",
 };

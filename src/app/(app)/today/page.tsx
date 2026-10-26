@@ -13,7 +13,7 @@ export const metadata: Metadata = { title: "Today · Sales OS" };
 
 function SectionHeading({ id, title, count }: { id: string; title: string; count: number }) {
   return (
-    <h2 id={id} className="flex items-center gap-2 px-1 text-sm font-semibold text-fg">
+    <h2 id={id} className="flex items-center gap-2 text-sm font-semibold text-fg">
       {title}
       <span className="text-fg-muted tabular-nums">({count})</span>
     </h2>
