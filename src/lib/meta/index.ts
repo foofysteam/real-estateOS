@@ -37,6 +37,9 @@ function parseToolMap(raw: string | undefined): Partial<ToolMap> | undefined {
   return result.data;
 }
 
-export function resetMetaGatewayForTests(): void {
+/** Forget the memoised gateway, e.g. after the stored connection changes. */
+export function resetMetaGateway(): void {
   cached = undefined;
 }
+
+export const resetMetaGatewayForTests = resetMetaGateway;

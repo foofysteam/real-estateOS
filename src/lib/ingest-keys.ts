@@ -25,3 +25,13 @@ export async function resolveIngestKey(plaintext: string): Promise<IngestKey | n
 export async function revokeIngestKey(id: string): Promise<void> {
   await db.ingestKey.update({ where: { id }, data: { isActive: false } });
 }
+
+export type IngestKeySummary = Pick<IngestKey, "id" | "name" | "source" | "isActive" | "lastUsedAt" | "createdAt">;
+
+/** Every key, newest first, without its hash. */
+export async function listIngestKeys(): Promise<IngestKeySummary[]> {
+  return db.ingestKey.findMany({
+    select: { id: true, name: true, source: true, isActive: true, lastUsedAt: true, createdAt: true },
+    orderBy: { createdAt: "desc" },
+  });
+}

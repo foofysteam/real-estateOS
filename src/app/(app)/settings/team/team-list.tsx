@@ -9,7 +9,7 @@ import { FormError } from "@/components/ui/field";
 import { useAction } from "@/lib/use-action";
 import { resetPasswordAction, setUserActiveAction } from "../actions";
 import { ActiveToggle } from "../active-toggle";
-import { TemporaryPassword } from "../temporary-password";
+import { TemporaryPassword } from "../show-once";
 import { InviteButton } from "./invite-form";
 
 export type TeamRow = {

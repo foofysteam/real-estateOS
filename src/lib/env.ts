@@ -23,6 +23,7 @@ const envSchema = z.object({
   META_MCP_TOOL_MAP: jsonString.optional(),
   META_GATEWAY: z.enum(["mcp", "graph"]).default("mcp"),
   META_GRAPH_VERSION: z.string().min(1).default("v24.0"),
+  APP_URL: z.url().optional(),
 });
 
 export type Env = z.infer<typeof envSchema>;

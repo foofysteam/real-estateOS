@@ -3,8 +3,13 @@ import type { ReactNode } from "react";
 import { ShieldAlert } from "lucide-react";
 import { EmptyState } from "@/components/ui/empty-state";
 import { ForbiddenError, requireUser } from "@/lib/auth/current-user";
+import { listIngestKeys } from "@/lib/ingest-keys";
+import { getMetaConnection, getMetaEndpointInfo } from "@/lib/meta/connection";
 import { listProjects } from "@/lib/projects";
 import { listUsers } from "@/lib/team";
+import { CsvImport } from "./import/csv-import";
+import { IngestKeys } from "./integrations/ingest-keys";
+import { MetaForm } from "./integrations/meta-form";
 import { ProjectList } from "./projects/project-list";
 import { parseSettingsTab, SettingsTabs, type SettingsTab } from "./settings-tabs";
 import { TeamList } from "./team/team-list";
@@ -39,12 +44,34 @@ async function TeamTab() {
   );
 }
 
-/** One renderer per tab; Task 17 replaces the placeholders. */
+async function IntegrationsTab() {
+  const [connection, keys] = await Promise.all([getMetaConnection(), listIngestKeys()]);
+  return (
+    <div className="flex flex-col gap-8">
+      <MetaForm
+        // Only display fields cross to the client; the token never leaves the server.
+        connection={
+          connection && {
+            pageId: connection.pageId,
+            adAccountId: connection.adAccountId,
+            hasToken: connection.hasToken,
+            mcpUrl: connection.mcpUrl,
+            leadFormCount: connection.leadFormIds.length,
+          }
+        }
+        endpoint={getMetaEndpointInfo()}
+      />
+      <IngestKeys keys={keys} />
+    </div>
+  );
+}
+
+/** One renderer per tab. */
 const TAB_CONTENT: Record<SettingsTab, () => Promise<ReactNode> | ReactNode> = {
   projects: ProjectsTab,
   team: TeamTab,
-  integrations: () => <p className="text-sm text-fg-muted">Coming in the next task</p>,
-  import: () => <p className="text-sm text-fg-muted">Coming in the next task</p>,
+  integrations: IntegrationsTab,
+  import: CsvImport,
 };
 
 async function isAdmin(): Promise<boolean> {

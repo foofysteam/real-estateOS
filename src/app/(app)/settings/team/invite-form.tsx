@@ -8,7 +8,7 @@ import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { Field, FormError, nativeControl } from "@/components/ui/field";
 import { useAction } from "@/lib/use-action";
 import { inviteUserAction, type FieldErrors } from "../actions";
-import { TemporaryPassword } from "../temporary-password";
+import { TemporaryPassword } from "../show-once";
 
 type Values = { email: string; name: string; role: "AGENT" | "ADMIN"; phone: string };
 

@@ -2,7 +2,13 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { ForbiddenError, requireUser } from "@/lib/auth/current-user";
+import { ForbiddenError, requireUser, type CurrentUser } from "@/lib/auth/current-user";
+import { importLeadsCsv, type CsvImportResult } from "@/lib/csv";
+import { db } from "@/lib/db";
+import { createIngestKey, revokeIngestKey } from "@/lib/ingest-keys";
+import { getMetaGateway, resetMetaGateway } from "@/lib/meta";
+import { saveMetaConnection } from "@/lib/meta/connection";
+import { CSV_IMPORT_SOURCES, INGEST_KEY_SOURCES } from "@/lib/sources";
 import {
   createProject,
   DuplicateSlugError,
@@ -27,12 +33,15 @@ export type SettingsResult<T extends object = object> = ({ ok: true } & T) | Set
 
 const FIELD_ERROR = "Check the highlighted fields";
 
+/** A readable failure raised by an action itself; its message is shown as-is. */
+class ActionError extends Error {}
+
 /** Domain errors that belong to one form field; the rest show as a form-level error. */
 const FIELD_DOMAIN_ERRORS: [new (...args: never[]) => Error, string][] = [
   [DuplicateSlugError, "slug"],
   [DuplicateEmailError, "email"],
 ];
-const DOMAIN_ERRORS = [ProjectNotFoundError, UserNotFoundError, LastAdminError];
+const DOMAIN_ERRORS = [ProjectNotFoundError, UserNotFoundError, LastAdminError, ActionError];
 
 function fieldErrorsFrom(err: z.ZodError): FieldErrors {
   const out: FieldErrors = {};
@@ -55,11 +64,13 @@ function toFailure(err: unknown): SettingsFailure {
 /** ADMIN-gated: validation and domain failures become readable results; anything unexpected still throws. */
 type RevalidateTarget = [path: string, type?: "layout" | "page"];
 
-async function adminRun<T extends object>(targets: RevalidateTarget[], work: () => Promise<T>): Promise<SettingsResult<T>> {
+async function adminRun<T extends object>(
+  targets: RevalidateTarget[],
+  work: (admin: CurrentUser) => Promise<T>,
+): Promise<SettingsResult<T>> {
   let value: T;
   try {
-    await requireUser("ADMIN");
-    value = await work();
+    value = await work(await requireUser("ADMIN"));
   } catch (err) {
     return toFailure(err);
   }
@@ -111,4 +122,84 @@ export async function setUserActiveAction(userId: string, active: boolean): Prom
 
 export async function resetPasswordAction(userId: string): Promise<SettingsResult<{ temporaryPassword: string }>> {
   return adminRun(TEAM_PATHS, async () => ({ temporaryPassword: await resetPassword(id.parse(userId)) }));
+}
+
+// ── Integrations ─────────────────────────────────────────────────────────────
+
+const META_PATHS: RevalidateTarget[] = [["/settings"], ["/ads"]];
+const KEY_PATHS: RevalidateTarget[] = [["/settings"]];
+const IMPORT_PATHS: RevalidateTarget[] = [["/leads"], ["/pipeline"], ["/today"]];
+const MAX_ERROR = 300;
+const MAX_CSV_BYTES = 2 * 1024 * 1024;
+
+const blankToUndefined = (v: unknown) => (typeof v === "string" && v.trim() === "" ? undefined : v);
+const metaId = z.string().trim().min(1, "Required").max(64, "64 characters at most");
+const metaConnectionSchema = z.object({
+  pageId: metaId,
+  adAccountId: metaId,
+  accessToken: z.preprocess(blankToUndefined, z.string().max(1024, "Token is too long").optional()),
+  mcpUrl: z.preprocess(blankToUndefined, z.url("Enter a full URL").optional()),
+});
+export type MetaConnectionForm = z.input<typeof metaConnectionSchema>;
+
+/** Saves the connection (a blank token keeps the stored one) and drops the memoised gateway so it picks up the change. */
+export async function saveMetaConnectionAction(input: MetaConnectionForm): Promise<SettingsResult> {
+  return adminRun(META_PATHS, async () => {
+    await saveMetaConnection(metaConnectionSchema.parse(input));
+    resetMetaGateway();
+    return {};
+  });
+}
+
+/** Lists the ad account's campaigns as a live check; Meta failures come back as a short readable error. */
+export async function testMetaConnectionAction(): Promise<SettingsResult<{ count: number }>> {
+  return adminRun([], async () => {
+    const conn = await db.metaConnection.findUnique({ where: { id: 1 }, select: { adAccountId: true } });
+    if (!conn) throw new ActionError("Save the connection first");
+    try {
+      const campaigns = await (await getMetaGateway()).listCampaigns(conn.adAccountId);
+      return { count: campaigns.length };
+    } catch (err) {
+      const message = err instanceof Error && err.message ? err.message : "Meta request failed";
+      throw new ActionError(message.slice(0, MAX_ERROR));
+    }
+  });
+}
+
+const ingestKeySchema = z.object({
+  name: z.string().trim().min(1, "Required").max(80, "80 characters at most"),
+  source: z.enum(INGEST_KEY_SOURCES, "Choose a source"),
+});
+
+/** Returns the key's plaintext once; only its hash is stored. */
+export async function createIngestKeyAction(
+  name: string,
+  source: (typeof INGEST_KEY_SOURCES)[number],
+): Promise<SettingsResult<{ id: string; plaintext: string }>> {
+  return adminRun(KEY_PATHS, async () => {
+    const input = ingestKeySchema.parse({ name, source });
+    return createIngestKey(input.name, input.source);
+  });
+}
+
+export async function revokeIngestKeyAction(keyId: string): Promise<SettingsResult> {
+  return adminRun(KEY_PATHS, async () => {
+    await revokeIngestKey(id.parse(keyId));
+    return {};
+  });
+}
+
+// ── Import ───────────────────────────────────────────────────────────────────
+
+const csvSourceSchema = z.object({ source: z.enum(CSV_IMPORT_SOURCES, "Choose a source") });
+
+/** Form action: `file` (≤ 2 MB) and `source`. Row problems come back per line; the import carries on past them. */
+export async function importCsvAction(formData: FormData): Promise<SettingsResult<CsvImportResult>> {
+  return adminRun(IMPORT_PATHS, async (admin) => {
+    const file = formData.get("file");
+    if (!(file instanceof File) || file.size === 0) throw new ActionError("Choose a CSV file");
+    if (file.size > MAX_CSV_BYTES) throw new ActionError("File too large (max 2 MB)");
+    const { source } = csvSourceSchema.parse({ source: formData.get("source") });
+    return importLeadsCsv(await file.text(), source, admin.id);
+  });
 }
