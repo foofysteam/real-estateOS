@@ -2,7 +2,49 @@
 
 Sales OS is a mobile-first CRM for a real-estate sales team selling Bengaluru projects. Leads arrive from Meta Lead Ads (webhook), website forms and property portals (a bearer-key ingest API), and CSV uploads; each lead is de-duplicated by phone number, scored, and moved through an eight-stage pipeline (New → Contacted → Qualified → Site visit scheduled → Site visit done → Negotiation → Booked / Lost). Agents work from a Today list of overdue and due follow-ups, admins manage projects, the team and integrations, and an Ads screen shows Meta spend and lead-form performance. It is built with Next.js 16, Prisma 7 and PostgreSQL 16.
 
-## Prerequisites
+## Try it in 5 minutes
+
+You need Docker (for Postgres) and Node.js 22 with pnpm (`corepack enable`).
+
+```bash
+git clone https://github.com/foofysteam/real-estateOS.git && cd real-estateOS
+cp .env.example .env
+echo "SESSION_SECRET=$(openssl rand -hex 32)" >> .env
+echo "ENCRYPTION_KEY=$(openssl rand -hex 32)" >> .env
+docker compose up -d          # Postgres 16 with the app + test databases
+pnpm install                  # also generates the Prisma client
+pnpm db:deploy && pnpm db:seed
+pnpm dev
+```
+
+Open http://localhost:3000 and sign in:
+
+| Role  | Email               | Password    |
+|-------|---------------------|-------------|
+| Admin | `admin@sc.studio`   | `admin1234` |
+| Agent | `agent1@sc.studio`  | `agent1234` |
+
+The demo data has 3 projects, 200 leads across every source and stage, and 60 follow-ups (overdue, due today, upcoming). To test on a phone, open `http://<your-laptop-LAN-IP>:3000` while on the same Wi-Fi; dev mode accepts plain http.
+
+**No Node installed?** Run everything in containers instead: `docker compose --profile app up`. The app image migrates the database and loads the demo data on first start, then serves on port 3000.
+
+## Host it so the team can test from their phones (Railway)
+
+The repository ships a production `Dockerfile`, so any container host works. Railway is the shortest path:
+
+1. Sign in at railway.app, **New Project → Deploy from GitHub repo**, pick `foofysteam/real-estateOS`, branch `phase-1`. Railway detects the Dockerfile.
+2. In the same project, **+ New → Database → PostgreSQL**.
+3. On the app service, **Variables**:
+   - `DATABASE_URL` → reference the Postgres service's `DATABASE_URL`
+   - `SESSION_SECRET` → `openssl rand -hex 32`
+   - `ENCRYPTION_KEY` → `openssl rand -hex 32`
+   - `SEED_ON_START` → `true` for a demo instance (loads the sample data only into an empty database; set to `false` or remove it for real data)
+   - `APP_URL` → the public URL Railway gives you under **Settings → Networking → Generate Domain** (https)
+4. Deploy. The container runs `prisma migrate deploy`, seeds if asked, and starts. Open the domain on your phone and sign in with the demo accounts above, then change the passwords from the user menu.
+
+Render and Fly.io work the same way: build from the Dockerfile, attach a Postgres, set the same four variables.
+
+## Prerequisites (manual setup without Docker)
 
 - Node.js 22
 - pnpm 10 (`corepack enable` picks up the version pinned in `package.json`)

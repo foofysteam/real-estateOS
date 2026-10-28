@@ -1,0 +1,44 @@
+# Local development stack.
+#
+#   docker compose up -d            # Postgres only; run the app with `pnpm dev`
+#   docker compose --profile app up # Postgres + the app in a container (no Node install needed)
+#
+# The default DATABASE_URL in .env.example already points at this database.
+services:
+  db:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: salesos
+      POSTGRES_PASSWORD: salesos
+      POSTGRES_DB: salesos
+    ports:
+      - "5432:5432"
+    volumes:
+      - salesos-pg:/var/lib/postgresql/data
+      - ./docker/initdb:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U salesos -d salesos"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  app:
+    profiles: ["app"]
+    build: .
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://salesos:salesos@db:5432/salesos
+      # Both must be set; generate each with: openssl rand -hex 32
+      SESSION_SECRET: ${SESSION_SECRET:?set SESSION_SECRET in .env}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:?set ENCRYPTION_KEY in .env}
+      APP_URL: ${APP_URL:-http://localhost:3000}
+      SEED_ON_START: ${SEED_ON_START:-true}
+    ports:
+      - "3000:3000"
+
+volumes:
+  salesos-pg:

@@ -1,0 +1,13 @@
+node_modules
+.next
+.git
+.superpowers
+.env
+.env.*
+!.env.example
+docs
+tests
+coverage
+*.md
+!README.md
+src/generated
