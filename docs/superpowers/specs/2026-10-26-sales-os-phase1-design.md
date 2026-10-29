@@ -33,7 +33,9 @@ Single tenant. One organisation per deployment. No per-org tables.
   `:root` and `.dark`. No UI kit dependency beyond Radix primitives
   (`@radix-ui/react-*`) and `lucide-react` icons.
 - Data: PostgreSQL 16, Prisma 7.10 with `@prisma/adapter-pg`.
-- Validation: Zod 4 at every boundary (API input, env, webhook payloads).
+- Validation: Zod 4 at every boundary (API input, env). Phase 1 parses Meta
+  webhook and Graph payloads with guarded hand-written checks (tested);
+  Zod schemas for them are a later hardening item.
 - Tests: Vitest 5. Unit tests for all `src/lib/**`. Integration tests for
   every route handler against a real Postgres test database
   (`DATABASE_URL_TEST`). Component tests with Testing Library for the
@@ -41,7 +43,7 @@ Single tenant. One organisation per deployment. No per-org tables.
 - Auth: email + password, argon2id hashes, signed `HttpOnly` session
   cookie (`sales_os_session`), 30-day expiry. Roles: `ADMIN`, `AGENT`.
 - Phone numbers stored E.164. Default region `IN` when no country code.
-- Money in integer paise. Display in ₹ with Indian grouping (`12,50,000`).
+- Money stored as integer rupees (`Int`, max ₹214 Cr). Ad spend (not persisted) may be fractional rupees. Display in ₹ with Indian grouping (`12,50,000`).
 - Timezone for display: `Asia/Kolkata`. Storage: UTC.
 - Every write to a Lead produces a `LeadEvent` row. The timeline is the
   audit log.
@@ -58,10 +60,10 @@ Single tenant. One organisation per deployment. No per-org tables.
 ## 4. Domain model
 
 ```
-Project        id, name, slug, city, priceMinPaise, priceMaxPaise, isActive
+Project        id, name, slug, city, priceMinRupees, priceMaxRupees, isActive
 User           id, email, name, passwordHash, role, phone?, isActive
 Lead           id, projectId?, ownerId?, name, phone (E.164, unique),
-               email?, source, stage, score (0-100), budgetPaise?,
+               email?, source, stage, score (0-100), budgetRupees?,
                configuration? ("2BHK"), locality?, notes?,
                lastContactedAt?, nextFollowUpAt?, lostReason?,
                createdAt, updatedAt
@@ -71,7 +73,7 @@ FollowUp       id, leadId, ownerId, dueAt, channel (CALL|WHATSAPP|VISIT|EMAIL),
                note?, completedAt?
 IngestKey      id, name, source, keyHash, lastUsedAt?, isActive
 WebhookEvent   id, provider ("meta"), externalId (unique per provider),
-               receivedAt, processedAt?, status (RECEIVED|PROCESSED|FAILED),
+               receivedAt, processedAt?, status (RECEIVED|PROCESSING|PROCESSED|FAILED),
                error?, raw (json)
 MetaConnection id (singleton row id=1), pageId, adAccountId,
                accessTokenEnc, leadFormIds (string[]), mcpUrl, updatedAt
@@ -100,7 +102,7 @@ Deterministic, recomputed on create and on every field update:
 ```
 base by source:  META_LEAD_AD 40, WEBSITE 45, GOOGLE_ADS 45,
                  PORTAL_* 35, WALK_IN 60, REFERRAL 65, CSV_IMPORT 20
-+20 if budgetPaise within the project's [priceMin, priceMax]
++20 if budgetRupees within the project's [priceMin, priceMax]
 +10 if configuration present
 +10 if locality present
 +5  if email present
@@ -111,9 +113,10 @@ clamp 0..100
 
 Inbound lead with a phone that already exists (after E.164 normalisation)
 does **not** create a new Lead. It appends a `DUPLICATE_INBOUND` event
-with the full normalised payload, sets `nextFollowUpAt = now` if the lead
-is not `BOOKED`/`LOST`, and returns the existing lead id with
-`deduplicated: true`. Email is never used for dedup (shared family
+with the full normalised payload, creates an open `FollowUp` (channel
+`CALL`, due now, owner = lead owner or none) so the lead resurfaces on
+Today, unless the lead is `BOOKED`/`LOST`, and returns the existing lead
+id with `deduplicated: true`. Email is never used for dedup (shared family
 emails are common).
 
 ## 5. Ingestion
@@ -129,7 +132,7 @@ type NormalizedLead = {
   phone: string;              // raw, normalised downstream
   email?: string;
   projectSlug?: string;
-  budgetPaise?: number;
+  budgetRupees?: number;
   configuration?: string;
   locality?: string;
   notes?: string;
@@ -152,7 +155,7 @@ Body is a flat JSON object validated by the generic schema
 `POST /api/ingest/csv` (ADMIN only, session auth) with `multipart/form-data`
 field `file` and `source`. Columns: `name,phone,email,project,budget,
 configuration,locality,notes`. Budget accepted as rupees (`45L`, `1.2Cr`,
-`4500000`) and converted to paise. Returns per-row result list.
+`4500000`) and stored as whole rupees. Returns per-row result list.
 
 ### 5.4 Meta Lead Ads webhook
 
@@ -169,7 +172,7 @@ configuration,locality,notes`. Budget accepted as rupees (`45L`, `1.2Cr`,
   endpoint always returns `200` within the request; fetching runs
   after the response is queued (`after()` from `next/server`).
 - `field_data` mapping: `full_name`→name, `phone_number`→phone,
-  `email`→email, any question whose key contains `budget`→budgetPaise,
+  `email`→email, any question whose key contains `budget`→budgetRupees,
   `configuration`/`bhk`→configuration, `location`/`locality`→locality.
   Unknown fields are kept in `notes` as `key: value` lines.
 
@@ -196,9 +199,9 @@ The app is an MCP **client** of Meta's hosted Ads MCP server.
   `META_GATEWAY=graph`. Default is `mcp`.
 - Operations:
   - `listCampaigns(adAccountId)` → `{ id, name, status, objective,
-    dailyBudgetPaise? }[]`
+    dailyBudgetRupees? }[]`
   - `getInsights(adAccountId, range: { since, until })` →
-    `{ spendPaise, impressions, clicks, leads, costPerLeadPaise? }`
+    `{ spendRupees, impressions, clicks, leads, costPerLeadRupees? }`
   - `listLeadForms(pageId)` → `{ id, name, status, leadsCount }[]`
 - Ads screen caches gateway responses for 5 minutes via `unstable_cache`
   with `revalidate: 300`, keyed by account id and range.

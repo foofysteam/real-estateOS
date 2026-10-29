@@ -1,0 +1,31 @@
+import { db } from "@/lib/db";
+import type { IngestKey, LeadSource } from "@/generated/prisma/client";
+import { generateIngestKey, hashIngestKey } from "@/lib/ingest-key-material";
+
+/** Mint a bearer key for a lead source. The plaintext is returned once and never stored. */
+export async function createIngestKey(name: string, source: LeadSource): Promise<{ id: string; plaintext: string }> {
+  const { plaintext, keyHash } = generateIngestKey();
+  const key = await db.ingestKey.create({ data: { name, source, keyHash } });
+  return { id: key.id, plaintext };
+}
+
+/** The active key matching this plaintext (bumping its lastUsedAt), or null. */
+export async function resolveIngestKey(plaintext: string): Promise<IngestKey | null> {
+  const key = await db.ingestKey.findUnique({ where: { keyHash: hashIngestKey(plaintext) } });
+  if (!key || !key.isActive) return null;
+  return db.ingestKey.update({ where: { id: key.id }, data: { lastUsedAt: new Date() } });
+}
+
+export async function revokeIngestKey(id: string): Promise<void> {
+  await db.ingestKey.update({ where: { id }, data: { isActive: false } });
+}
+
+export type IngestKeySummary = Pick<IngestKey, "id" | "name" | "source" | "isActive" | "lastUsedAt" | "createdAt">;
+
+/** Every key, newest first, without its hash. */
+export async function listIngestKeys(): Promise<IngestKeySummary[]> {
+  return db.ingestKey.findMany({
+    select: { id: true, name: true, source: true, isActive: true, lastUsedAt: true, createdAt: true },
+    orderBy: { createdAt: "desc" },
+  });
+}
